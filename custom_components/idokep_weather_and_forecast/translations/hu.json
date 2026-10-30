@@ -1,0 +1,175 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "description": "Név: a bejegyzés és eszközei neve (pl. Otthon). Település: a település neve úgy, ahogy az idokep.hu címében szerepel (pl. Budapest). Ha szeretnéd, egy időjárás-állomást is megadhatsz a kódjával. Segítségért tekintsd meg a dokumentációt a GitHubon.",
+                "data": {
+                    "name": "Név",
+                    "location": "Település",
+                    "station": "Időjárás-állomás kódja (nem kötelező)"
+                }
+            }
+        },
+        "error": {
+            "connection": "Nem sikerült időjárási adatot lekérni ehhez a településhez. Ellenőrizd a nevet és a kapcsolatot.",
+            "unknown": "Ismeretlen hiba történt.",
+            "station": "Ehhez a kódhoz nincs automata adat. Ellenőrizd a kódot az idokep.hu/automata oldalon.",
+            "station_connection": "Az idokep.hu nem érhető el. Ellenőrizd a kapcsolatot.",
+            "name": "Adj meg egy nevet."
+        },
+        "abort": {
+            "already_configured": "Ez a bejegyzés már konfigurálva van."
+        }
+    },
+    "entity": {
+        "sensor": {
+            "temperature": {
+                "name": "Hőmérséklet"
+            },
+            "temperature_max_today": {
+                "name": "Mai maximum hőmérséklet"
+            },
+            "temperature_min_today": {
+                "name": "Mai minimum hőmérséklet"
+            },
+            "condition": {
+                "name": "Állapot",
+                "state": {
+                    "cloudy": "Felhős",
+                    "exceptional": "Rendkívüli",
+                    "fog": "Köd",
+                    "hail": "Jégeső",
+                    "lightning": "Villámlás",
+                    "lightning-rainy": "Zivatar",
+                    "partlycloudy": "Részben felhős",
+                    "pouring": "Felhőszakadás",
+                    "rainy": "Esős",
+                    "snowy": "Havazás",
+                    "snowy-rainy": "Havas eső",
+                    "sunny": "Napos",
+                    "windy": "Szeles"
+                }
+            },
+            "wind_bearing": {
+                "name": "Szélirány (fok)"
+            },
+            "wind_direction": {
+                "name": "Szélirány (égtáj)",
+                "state": {
+                    "n": "É",
+                    "nne": "ÉÉK",
+                    "ne": "ÉK",
+                    "ene": "KÉK",
+                    "e": "K",
+                    "ese": "KDK",
+                    "se": "DK",
+                    "sse": "DDK",
+                    "s": "D",
+                    "ssw": "DDNy",
+                    "sw": "DNy",
+                    "wsw": "NyDNy",
+                    "w": "Ny",
+                    "wnw": "NyÉNy",
+                    "nw": "ÉNy",
+                    "nnw": "ÉÉNy"
+                }
+            },
+            "wind_strength": {
+                "name": "Szélerősség",
+                "state": {
+                    "calm": "Szélcsend",
+                    "light_air": "Alig érezhető szél",
+                    "light_breeze": "Könnyű szél",
+                    "gentle_breeze": "Gyenge szél",
+                    "moderate_breeze": "Mérsékelt szél",
+                    "fresh_breeze": "Élénk szél",
+                    "strong_breeze": "Erős szél",
+                    "near_gale": "Igen erős szél",
+                    "gale": "Viharos szél",
+                    "strong_gale": "Heves vihar",
+                    "storm": "Dühöngő vihar",
+                    "violent_storm": "Heves szélvihar",
+                    "hurricane": "Orkán"
+                }
+            },
+            "wind_speed": {
+                "name": "Szélsebesség"
+            },
+            "station_temperature": {
+                "name": "Hőmérséklet"
+            },
+            "station_humidity": {
+                "name": "Páratartalom"
+            },
+            "station_pressure": {
+                "name": "Légnyomás"
+            },
+            "station_precipitation_24h": {
+                "name": "24 órás csapadék"
+            },
+            "station_precipitation_today": {
+                "name": "Éjfél óta hullott csapadék"
+            },
+            "station_precipitation_intensity": {
+                "name": "Csapadékintenzitás"
+            },
+            "station_wind_speed": {
+                "name": "Szélsebesség"
+            },
+            "station_wind_gust": {
+                "name": "Széllökés"
+            },
+            "station_wind_bearing": {
+                "name": "Szélirány (fok)"
+            },
+            "station_uv_index": {
+                "name": "UV-B index"
+            },
+            "station_solar_radiation": {
+                "name": "Globálsugárzás"
+            },
+            "station_water_temperature": {
+                "name": "Vízhőmérséklet"
+            },
+            "station_measurement_time": {
+                "name": "Mérés ideje"
+            }
+        },
+        "binary_sensor": {
+            "storm_expected_1h": {
+                "name": "Vihar várható az elkövetkező órában"
+            },
+            "weather_alert": {
+                "name": "Riasztás"
+            },
+            "alert_yellow": {
+                "name": "Sárga riasztás"
+            },
+            "alert_orange": {
+                "name": "Narancs riasztás"
+            },
+            "alert_red": {
+                "name": "Piros riasztás"
+            }
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Beállítások",
+                "description": "Település: a név úgy, ahogy az idokep.hu címében szerepel (pl. Budapest). Időjárás-állomás: egy idokep.hu automata kódja, ahogy a címében szerepel (pl. jozsamet). Törölve az időjárás-állomás eszköz megszűnik.",
+                "data": {
+                    "location": "Település",
+                    "station": "Időjárás-állomás kódja (nem kötelező)"
+                }
+            }
+        },
+        "error": {
+            "station": "Ehhez a kódhoz nincs automata adat. Ellenőrizd a kódot az idokep.hu/automata oldalon.",
+            "station_connection": "Az idokep.hu nem érhető el. Ellenőrizd a kapcsolatot.",
+            "connection": "Nem sikerült időjárási adatot lekérni ehhez a településhez. Ellenőrizd a nevet és a kapcsolatot.",
+            "unknown": "Ismeretlen hiba történt.",
+            "already_configured": "Ez a település már egy másik bejegyzésben be van állítva."
+        }
+    }
+}

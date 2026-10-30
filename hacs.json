@@ -1,0 +1,6 @@
+{
+    "name": "Időkép Weather & Forecast",
+    "country": "hu",
+    "homeassistant": "2024.3.3",
+    "hacs": "2.0.1"
+}

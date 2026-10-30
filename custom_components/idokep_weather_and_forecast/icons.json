@@ -1,0 +1,101 @@
+{
+  "entity": {
+    "sensor": {
+      "temperature_max_today": {
+        "default": "mdi:thermometer-chevron-up"
+      },
+      "temperature_min_today": {
+        "default": "mdi:thermometer-chevron-down"
+      },
+      "condition": {
+        "default": "mdi:weather-partly-cloudy",
+        "state": {
+          "clear-night": "mdi:weather-night",
+          "cloudy": "mdi:weather-cloudy",
+          "exceptional": "mdi:alert-circle-outline",
+          "fog": "mdi:weather-fog",
+          "hail": "mdi:weather-hail",
+          "lightning": "mdi:weather-lightning",
+          "lightning-rainy": "mdi:weather-lightning-rainy",
+          "partlycloudy": "mdi:weather-partly-cloudy",
+          "pouring": "mdi:weather-pouring",
+          "rainy": "mdi:weather-rainy",
+          "snowy": "mdi:weather-snowy",
+          "snowy-rainy": "mdi:weather-snowy-rainy",
+          "sunny": "mdi:weather-sunny",
+          "windy": "mdi:weather-windy"
+        }
+      },
+      "wind_bearing": {
+        "default": "mdi:compass-outline"
+      },
+      "wind_direction": {
+        "default": "mdi:compass-rose"
+      },
+      "wind_strength": {
+        "default": "mdi:weather-windy"
+      },
+      "station_precipitation_today": {
+        "default": "mdi:weather-rainy"
+      },
+      "station_precipitation_24h": {
+        "default": "mdi:weather-rainy"
+      },
+      "station_wind_gust": {
+        "default": "mdi:weather-windy-variant"
+      },
+      "station_wind_bearing": {
+        "default": "mdi:compass-outline"
+      },
+      "station_uv_index": {
+        "default": "mdi:sun-wireless-outline"
+      },
+      "station_solar_radiation": {
+        "default": "mdi:white-balance-sunny"
+      },
+      "station_water_temperature": {
+        "default": "mdi:pool-thermometer"
+      },
+      "station_measurement_time": {
+        "default": "mdi:clock-outline"
+      }
+    },
+    "binary_sensor": {
+      "storm_expected_1h": {
+        "default": "mdi:weather-partly-cloudy",
+        "state": {
+          "on": "mdi:weather-lightning"
+        }
+      },
+      "weather_alert": {
+        "default": "mdi:shield-check-outline",
+        "state": {
+          "on": "mdi:alert"
+        }
+      },
+      "alert_yellow": {
+        "default": "mdi:shield-check-outline",
+        "state": {
+          "on": "mdi:alert-outline"
+        }
+      },
+      "alert_orange": {
+        "default": "mdi:shield-check-outline",
+        "state": {
+          "on": "mdi:alert"
+        }
+      },
+      "alert_red": {
+        "default": "mdi:shield-check-outline",
+        "state": {
+          "on": "mdi:alert-octagon"
+        }
+      }
+    },
+    "image": {
+      "national_radar": {
+        "default": "mdi:radar"
+      }
+    }
+  }
+}

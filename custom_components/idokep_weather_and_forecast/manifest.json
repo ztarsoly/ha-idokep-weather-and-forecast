@@ -1,0 +1,16 @@
+{
+  "domain": "idokep_weather_and_forecast",
+  "name": "Időkép Weather & Forecast",
+  "codeowners": [
+    "@FabianGabor"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/FabianGabor/HA-Idokep",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/FabianGabor/HA-Idokep/issues",
+  "requirements": [
+    "beautifulsoup4"
+  ],
+  "version": "1.00"
+}

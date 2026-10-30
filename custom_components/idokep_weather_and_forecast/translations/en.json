@@ -1,0 +1,175 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "description": "Name: the name of this entry and its devices (e.g. Home). Settlement: the settlement name as it appears in idokep.hu URLs (e.g. Budapest). Optionally, add a weather station by its code. For help, see the documentation on GitHub.",
+                "data": {
+                    "name": "Name",
+                    "location": "Settlement",
+                    "station": "Weather station code (optional)"
+                }
+            }
+        },
+        "error": {
+            "connection": "Could not fetch weather data for this settlement. Check the name and your connection.",
+            "unknown": "Unknown error occurred.",
+            "station": "No weather station data found for this code. Check the code on idokep.hu/automata.",
+            "station_connection": "Could not reach idokep.hu. Check your connection.",
+            "name": "Enter a name."
+        },
+        "abort": {
+            "already_configured": "This entry is already configured."
+        }
+    },
+    "entity": {
+        "sensor": {
+            "temperature": {
+                "name": "Temperature"
+            },
+            "temperature_max_today": {
+                "name": "Today's maximum temperature"
+            },
+            "temperature_min_today": {
+                "name": "Today's minimum temperature"
+            },
+            "condition": {
+                "name": "Condition",
+                "state": {
+                    "cloudy": "Cloudy",
+                    "exceptional": "Exceptional",
+                    "fog": "Fog",
+                    "hail": "Hail",
+                    "lightning": "Lightning",
+                    "lightning-rainy": "Thunderstorm",
+                    "partlycloudy": "Partly cloudy",
+                    "pouring": "Heavy rain",
+                    "rainy": "Rainy",
+                    "snowy": "Snowy",
+                    "snowy-rainy": "Sleet",
+                    "sunny": "Sunny",
+                    "windy": "Windy"
+                }
+            },
+            "wind_bearing": {
+                "name": "Wind bearing"
+            },
+            "wind_direction": {
+                "name": "Wind direction",
+                "state": {
+                    "n": "N",
+                    "nne": "NNE",
+                    "ne": "NE",
+                    "ene": "ENE",
+                    "e": "E",
+                    "ese": "ESE",
+                    "se": "SE",
+                    "sse": "SSE",
+                    "s": "S",
+                    "ssw": "SSW",
+                    "sw": "SW",
+                    "wsw": "WSW",
+                    "w": "W",
+                    "wnw": "WNW",
+                    "nw": "NW",
+                    "nnw": "NNW"
+                }
+            },
+            "wind_strength": {
+                "name": "Wind strength",
+                "state": {
+                    "calm": "Calm",
+                    "light_air": "Light air",
+                    "light_breeze": "Light breeze",
+                    "gentle_breeze": "Gentle breeze",
+                    "moderate_breeze": "Moderate breeze",
+                    "fresh_breeze": "Fresh breeze",
+                    "strong_breeze": "Strong breeze",
+                    "near_gale": "High wind / Moderate gale",
+                    "gale": "Gale / Fresh gale",
+                    "strong_gale": "Strong gale",
+                    "storm": "Storm / Whole gale",
+                    "violent_storm": "Violent storm",
+                    "hurricane": "Hurricane force"
+                }
+            },
+            "wind_speed": {
+                "name": "Wind speed"
+            },
+            "station_temperature": {
+                "name": "Temperature"
+            },
+            "station_humidity": {
+                "name": "Humidity"
+            },
+            "station_pressure": {
+                "name": "Pressure"
+            },
+            "station_precipitation_24h": {
+                "name": "Precipitation (last 24 hours)"
+            },
+            "station_precipitation_today": {
+                "name": "Precipitation since midnight"
+            },
+            "station_precipitation_intensity": {
+                "name": "Precipitation intensity"
+            },
+            "station_wind_speed": {
+                "name": "Wind speed"
+            },
+            "station_wind_gust": {
+                "name": "Wind gust"
+            },
+            "station_wind_bearing": {
+                "name": "Wind bearing"
+            },
+            "station_uv_index": {
+                "name": "UV index"
+            },
+            "station_solar_radiation": {
+                "name": "Solar radiation"
+            },
+            "station_water_temperature": {
+                "name": "Water temperature"
+            },
+            "station_measurement_time": {
+                "name": "Measurement time"
+            }
+        },
+        "binary_sensor": {
+            "storm_expected_1h": {
+                "name": "Storm Expected in Next Hour"
+            },
+            "weather_alert": {
+                "name": "Alert"
+            },
+            "alert_yellow": {
+                "name": "Yellow Alert"
+            },
+            "alert_orange": {
+                "name": "Orange Alert"
+            },
+            "alert_red": {
+                "name": "Red Alert"
+            }
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Configuration",
+                "description": "Settlement: the name as it appears in idokep.hu URLs (e.g. Budapest). Weather station: the code of an idokep.hu weather station, as in its page address (e.g. jozsamet). Clear it to remove the weather station device.",
+                "data": {
+                    "location": "Settlement",
+                    "station": "Weather station code (optional)"
+                }
+            }
+        },
+        "error": {
+            "station": "No weather station data found for this code. Check the code on idokep.hu/automata.",
+            "station_connection": "Could not reach idokep.hu. Check your connection.",
+            "connection": "Could not fetch weather data for this settlement. Check the name and your connection.",
+            "unknown": "Unknown error occurred.",
+            "already_configured": "This settlement is already configured in another entry."
+        }
+    }
+}

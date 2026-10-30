@@ -1,0 +1,269 @@
+"""Unit tests for the Időkép weather entity."""
+
+from __future__ import annotations
+
+from unittest.mock import Mock, patch
+
+import pytest
+from homeassistant.components.weather import (
+    ATTR_CONDITION_CLEAR_NIGHT,
+    ATTR_CONDITION_SUNNY,
+)
+from homeassistant.components.weather.const import WeatherEntityFeature
+
+from custom_components.idokep_weather_and_forecast.const import DOMAIN
+from custom_components.idokep_weather_and_forecast.entity import (
+    IdokepEntity,
+    IdokepStationEntity,
+)
+from custom_components.idokep_weather_and_forecast.image import IdokepRadarImage
+from custom_components.idokep_weather_and_forecast.weather import (
+    IdokepWeatherEntity,
+    async_setup_entry,
+)
+
+
+class TestIdokepWeatherEntity:
+    """Test cases for IdokepWeatherEntity."""
+
+    def test_init(self, mock_coordinator: Mock) -> None:
+        """The entity is named like its device and has both forecasts."""
+        entity = IdokepWeatherEntity(mock_coordinator)
+
+        assert entity._attr_name is None  # named like the device
+        assert entity._attr_supported_features == (
+            WeatherEntityFeature.FORECAST_DAILY | WeatherEntityFeature.FORECAST_HOURLY
+        )
+
+    @pytest.mark.parametrize(
+        "location", ["Budapest", "", "!@#$%^&*()", "Nyíregyháza", "Székesfehérvár"]
+    )
+    def test_unique_id_does_not_depend_on_settlement(
+        self, mock_coordinator: Mock, location: str
+    ) -> None:
+        """The unique ID stays when the settlement is changed in Configure."""
+        mock_coordinator.config_entry.data = {"location": location}
+
+        entity = IdokepWeatherEntity(mock_coordinator)
+
+        assert entity._attr_unique_id == "test_entry_id_weather"
+
+    def test_device_info_property(self, mock_coordinator: Mock) -> None:
+        """Test device_info property returns correct device information."""
+        entity = IdokepWeatherEntity(mock_coordinator)
+        device_info = entity.device_info
+
+        expected_device_info = {
+            "identifiers": {(DOMAIN, "test_entry_id")},
+            "name": "Budapest Forecast",
+            "manufacturer": "Időkép",
+            "model": "Weather forecast",
+            "entry_type": "service",
+        }
+
+        assert device_info == expected_device_info
+
+    def test_has_entity_name_property(self, mock_coordinator: Mock) -> None:
+        """Test has_entity_name property returns True."""
+        entity = IdokepWeatherEntity(mock_coordinator)
+        assert entity.has_entity_name is True
+
+    def test_wind_bearing_property(self, mock_coordinator: Mock) -> None:
+        """Test wind_bearing comes from coordinator data, None when missing."""
+        entity = IdokepWeatherEntity(mock_coordinator)
+        assert entity.wind_bearing is None
+        mock_coordinator.data = {"wind_bearing": 15}
+        assert entity.wind_bearing == 15
+
+    def test_wind_speed_property(self, mock_coordinator: Mock) -> None:
+        """The estimated wind speed is the current wind speed, in km/h."""
+        entity = IdokepWeatherEntity(mock_coordinator)
+        assert entity.native_wind_speed is None
+        assert entity.native_wind_speed_unit == "km/h"
+        mock_coordinator.data = {"wind_speed": 24}
+        assert entity.native_wind_speed == 24
+
+    def test_condition_property_daytime(self, mock_coordinator: Mock) -> None:
+        """Test condition property returns sunny during daytime."""
+        with patch(
+            "custom_components.idokep_weather_and_forecast.weather.sun.is_up",
+            return_value=True,
+        ):
+            entity = IdokepWeatherEntity(mock_coordinator)
+            assert entity.condition == ATTR_CONDITION_SUNNY
+
+    def test_condition_property_nighttime(self, mock_coordinator: Mock) -> None:
+        """Test condition property returns clear-night when sunny at night."""
+        with patch(
+            "custom_components.idokep_weather_and_forecast.weather.sun.is_up",
+            return_value=False,
+        ):
+            entity = IdokepWeatherEntity(mock_coordinator)
+            assert entity.condition == ATTR_CONDITION_CLEAR_NIGHT
+
+    def test_condition_property_non_sunny_nighttime(
+        self, mock_coordinator: Mock
+    ) -> None:
+        """Test condition returns original condition when not sunny at night."""
+        mock_coordinator.data = {"condition": "cloudy"}
+        with patch(
+            "custom_components.idokep_weather_and_forecast.weather.sun.is_up",
+            return_value=False,
+        ):
+            entity = IdokepWeatherEntity(mock_coordinator)
+            assert entity.condition == "cloudy"
+
+    def test_condition_property_none(self, mock_coordinator: Mock) -> None:
+        """Test condition property when coordinator data is None."""
+        mock_coordinator.data = {"condition": None}
+        entity = IdokepWeatherEntity(mock_coordinator)
+        assert entity.condition is None
+
+    def test_native_temperature_property(self, mock_coordinator: Mock) -> None:
+        """Test native_temperature property returns float value."""
+        entity = IdokepWeatherEntity(mock_coordinator)
+        result = entity.native_temperature
+        assert result == 20.5
+        assert isinstance(result, float)
+
+    def test_native_temperature_property_none(self, mock_coordinator: Mock) -> None:
+        """Test native_temperature property when temperature is None."""
+        mock_coordinator.data = {"temperature": None}
+        entity = IdokepWeatherEntity(mock_coordinator)
+        assert entity.native_temperature is None
+
+    def test_native_temperature_property_string_conversion(
+        self, mock_coordinator: Mock
+    ) -> None:
+        """Test native_temperature property converts string to float."""
+        mock_coordinator.data = {"temperature": "25.5"}
+        entity = IdokepWeatherEntity(mock_coordinator)
+        result = entity.native_temperature
+        assert result == 25.5
+        assert isinstance(result, float)
+
+    def test_native_temperature_unit_property(self, mock_coordinator: Mock) -> None:
+        """Test native_temperature_unit property returns Celsius."""
+        entity = IdokepWeatherEntity(mock_coordinator)
+        assert entity.native_temperature_unit == "°C"
+
+    def test_extra_state_attributes_property(self, mock_coordinator: Mock) -> None:
+        """Test extra_state_attributes property returns correct attributes."""
+        entity = IdokepWeatherEntity(mock_coordinator)
+        # Temperature, units etc. are standard weather attributes set by HA
+        assert entity.extra_state_attributes is None
+
+    @pytest.mark.asyncio
+    async def test_async_forecast_hourly(self, mock_coordinator: Mock) -> None:
+        """Test async_forecast_hourly returns hourly forecast data."""
+        entity = IdokepWeatherEntity(mock_coordinator)
+        forecast = await entity.async_forecast_hourly()
+
+        expected_forecast = [
+            {
+                "datetime": "2025-07-04T12:00:00",
+                "temperature": 22.0,
+                "condition": "sunny",
+                "precipitation": 0,
+            },
+            {
+                "datetime": "2025-07-04T13:00:00",
+                "temperature": 23.5,
+                "condition": "partly-cloudy",
+                "precipitation": 0,
+            },
+        ]
+
+        assert forecast == expected_forecast
+
+    @pytest.mark.asyncio
+    async def test_async_forecast_hourly_empty(self, mock_coordinator: Mock) -> None:
+        """Test async_forecast_hourly returns empty list when no data."""
+        mock_coordinator.data = {}
+        entity = IdokepWeatherEntity(mock_coordinator)
+        forecast = await entity.async_forecast_hourly()
+
+        assert forecast == []
+
+    @pytest.mark.asyncio
+    async def test_async_forecast_daily(self, mock_coordinator: Mock) -> None:
+        """Test async_forecast_daily returns daily forecast data."""
+        entity = IdokepWeatherEntity(mock_coordinator)
+        forecast = await entity.async_forecast_daily()
+
+        expected_forecast = [
+            {
+                "datetime": "2025-07-04",
+                "temperature": 25.0,
+                "templow": 15.0,
+                "condition": "sunny",
+                "precipitation": 0,
+            },
+            {
+                "datetime": "2025-07-05",
+                "temperature": 27.0,
+                "templow": 17.0,
+                "condition": "partly-cloudy",
+                "precipitation": 2.5,
+            },
+        ]
+
+        assert forecast == expected_forecast
+
+    @pytest.mark.asyncio
+    async def test_async_forecast_daily_empty(self, mock_coordinator: Mock) -> None:
+        """Test async_forecast_daily returns empty list when no data."""
+        mock_coordinator.data = {}
+        entity = IdokepWeatherEntity(mock_coordinator)
+        forecast = await entity.async_forecast_daily()
+
+        assert forecast == []
+
+    def test_coordinator_update_pushes_forecasts(self, mock_coordinator: Mock) -> None:
+        """Coordinator updates notify forecast subscribers, not just state."""
+        entity = IdokepWeatherEntity(mock_coordinator)
+        entity.hass = mock_coordinator.hass
+        listeners_coro = object()
+        with (
+            patch.object(entity, "async_write_ha_state") as write_state,
+            patch.object(
+                entity, "async_update_listeners", Mock(return_value=listeners_coro)
+            ) as update_listeners,
+        ):
+            entity._handle_coordinator_update()
+
+        write_state.assert_called_once()
+        update_listeners.assert_called_once_with(None)
+        mock_coordinator.config_entry.async_create_task.assert_called_once_with(
+            entity.hass, listeners_coro
+        )
+
+
+@pytest.mark.asyncio
+async def test_async_setup_entry(mock_coordinator: Mock) -> None:
+    """Test async_setup_entry function."""
+    # Mock the required parameters
+    mock_hass = Mock()
+    mock_entry = Mock()
+    mock_entry.runtime_data.coordinator = mock_coordinator
+    # Ensure the coordinator has proper location data
+    mock_coordinator.config_entry.data = {"location": "Budapest"}
+    mock_async_add_entities = Mock()
+
+    # Call the function
+    await async_setup_entry(mock_hass, mock_entry, mock_async_add_entities)
+
+    # Verify that async_add_entities was called with a weather entity
+    mock_async_add_entities.assert_called_once()
+    call_args = mock_async_add_entities.call_args[0][0]
+    assert len(call_args) == 1
+    assert isinstance(call_args[0], IdokepWeatherEntity)
+
+
+def test_attribution_only_on_weather_entity(mock_coordinator: Mock) -> None:
+    """The weather entity has the attribution; the other entities don't."""
+    assert IdokepWeatherEntity(mock_coordinator).attribution == (
+        "Weather forecast by Időkép"
+    )
+    for cls in (IdokepEntity, IdokepStationEntity, IdokepRadarImage):
+        assert "_attr_attribution" not in vars(cls), cls.__name__
