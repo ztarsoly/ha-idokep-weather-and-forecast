@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import contextlib
-import datetime
+import datetime as dt
 import re
 import socket
 import unicodedata
@@ -201,12 +201,12 @@ class TimeUtils:
     """Utilities for time handling."""
 
     @staticmethod
-    def get_local_timezone() -> datetime.tzinfo:
+    def get_local_timezone() -> dt.tzinfo:
         """Get Budapest timezone."""
         return (
             zoneinfo.ZoneInfo("Europe/Budapest")
             if zoneinfo is not None
-            else datetime.timezone(datetime.timedelta(hours=2))
+            else dt.timezone(dt.timedelta(hours=2))
         )
 
 
@@ -471,7 +471,7 @@ class HourlyForecastParser(WeatherParser):
         result = {}
         forecast = []
         local_tz = TimeUtils.get_local_timezone()
-        now = datetime.datetime.now(tz=local_tz)
+        now = dt.datetime.now(tz=local_tz)
 
         # Start from today as the base date
         # (hourly forecast begins with today's remaining hours)
@@ -499,7 +499,7 @@ class HourlyForecastParser(WeatherParser):
 
                 # If hour decreased, we moved to next day
                 if last_hour is not None and hour_int < last_hour:
-                    current_date += datetime.timedelta(days=1)
+                    current_date += dt.timedelta(days=1)
 
                 last_hour = hour_int
 
@@ -530,32 +530,32 @@ class HourlyForecastParser(WeatherParser):
         self._last_forecast = list(items)
 
     def _with_current_hour(
-        self, forecast: list[dict[str, Any]], now: datetime.datetime
+        self, forecast: list[dict[str, Any]], now: dt.datetime
     ) -> list[dict[str, Any]]:
         """Return forecast with the current hour's kept item put first if missing."""
-        first_start = datetime.datetime.fromisoformat(forecast[0]["datetime"])
+        first_start = dt.datetime.fromisoformat(forecast[0]["datetime"])
         if first_start <= now:
             return forecast
         for item in self._last_forecast:
             try:
-                start = datetime.datetime.fromisoformat(item["datetime"])
+                start = dt.datetime.fromisoformat(item["datetime"])
             except (KeyError, TypeError, ValueError):
                 continue
             if start.tzinfo is None:
                 continue
             # The page starts after now, so this slot is before its first one
-            if start <= now < start + datetime.timedelta(hours=1):
+            if start <= now < start + dt.timedelta(hours=1):
                 return [item, *forecast]
         return forecast
 
     @staticmethod
     def _current_hour_item(
-        forecast: list[dict[str, Any]], now: datetime.datetime
+        forecast: list[dict[str, Any]], now: dt.datetime
     ) -> dict[str, Any] | None:
         """Return the forecast item whose one-hour slot contains now."""
         for item in forecast:
-            start = datetime.datetime.fromisoformat(item["datetime"])
-            if start <= now < start + datetime.timedelta(hours=1):
+            start = dt.datetime.fromisoformat(item["datetime"])
+            if start <= now < start + dt.timedelta(hours=1):
                 return item
         # Page may already start at the next hour; fall back to the first slot
         return forecast[0]
@@ -564,8 +564,8 @@ class HourlyForecastParser(WeatherParser):
         self,
         card: Tag,
         hour_div: Tag | None,
-        forecast_date: datetime.date,
-        local_tz: datetime.tzinfo | None = None,
+        forecast_date: dt.date,
+        local_tz: dt.tzinfo | None = None,
     ) -> dict[str, Any] | None:
         """Parse individual hourly forecast card."""
         temp_div = card.find("div", class_="ik tempValue")  # class unchanged
@@ -593,15 +593,15 @@ class HourlyForecastParser(WeatherParser):
             hour_int = int(hour_text.split(":")[0])
             minute_int = int(hour_text.split(":")[1]) if ":" in hour_text else 0
 
-            dt = datetime.datetime.combine(
+            slot_start = dt.datetime.combine(
                 forecast_date,
-                datetime.time(hour_int, minute_int),
+                dt.time(hour_int, minute_int),
                 tzinfo=local_tz or TimeUtils.get_local_timezone(),
             )
 
             strength = self.extract_wind_strength(card)
             return {
-                "datetime": dt.isoformat(),
+                "datetime": slot_start.isoformat(),
                 "temperature": temp,
                 "condition": condition,
                 "precipitation": precipitation,
@@ -763,7 +763,7 @@ class DailyForecastParser(WeatherParser):
         "december": 12,
     }
 
-    def extract_date(self, col: Tag) -> datetime.date | None:
+    def extract_date(self, col: Tag) -> dt.date | None:
         """
         Return the date a daily column is for.
 
@@ -777,7 +777,7 @@ class DailyForecastParser(WeatherParser):
         if not match or match.group(2).lower() not in self._MONTHS:
             return None
         try:
-            return datetime.date(
+            return dt.date(
                 int(match.group(1)),
                 self._MONTHS[match.group(2).lower()],
                 int(match.group(3)),
@@ -790,11 +790,11 @@ class DailyForecastParser(WeatherParser):
         result = {}
         daily_forecast = []
         daily_cols = soup.find_all("div", class_="ik dailyForecastCol")
-        today = datetime.datetime.now(tz=TimeUtils.get_local_timezone()).date()
+        today = dt.datetime.now(tz=TimeUtils.get_local_timezone()).date()
 
         # Each column carries its own date: in the evening idokep.hu drops
         # today's column, so the strip does not always start with today
-        previous_date: datetime.date | None = None
+        previous_date: dt.date | None = None
         for col in daily_cols:
             if not isinstance(col, Tag):
                 continue
@@ -805,7 +805,7 @@ class DailyForecastParser(WeatherParser):
                 forecast_date = (
                     today
                     if previous_date is None
-                    else previous_date + datetime.timedelta(days=1)
+                    else previous_date + dt.timedelta(days=1)
                 )
             previous_date = forecast_date
             if forecast_date < today:
@@ -840,7 +840,7 @@ class DailyForecastParser(WeatherParser):
         Taken from the daily column dated today, or from today's entry kept
         from earlier today once the page has dropped that column.
         """
-        today = datetime.datetime.now(tz=TimeUtils.get_local_timezone()).date()
+        today = dt.datetime.now(tz=TimeUtils.get_local_timezone()).date()
         for col in soup.find_all("div", class_="ik dailyForecastCol"):
             if isinstance(col, Tag) and self.extract_date(col) == today:
                 self._today_item = self._parse_daily_column(col, today)
@@ -856,7 +856,7 @@ class DailyForecastParser(WeatherParser):
             result["temperature_min_today"] = kept["templow"]
         return result
 
-    def _kept_today_item(self, today: datetime.date) -> dict[str, Any] | None:
+    def _kept_today_item(self, today: dt.date) -> dict[str, Any] | None:
         """Return the remembered entry if it is for today (else forget it)."""
         if self._today_item is None:
             return None
@@ -865,9 +865,7 @@ class DailyForecastParser(WeatherParser):
             return None
         return self._today_item
 
-    def _parse_daily_column(
-        self, col: Tag, forecast_date: datetime.date
-    ) -> dict[str, Any]:
+    def _parse_daily_column(self, col: Tag, forecast_date: dt.date) -> dict[str, Any]:
         """Parse individual daily forecast column."""
         min_temp, max_temp = self.extract_temperatures(col)
         condition = self.extract_condition(col)

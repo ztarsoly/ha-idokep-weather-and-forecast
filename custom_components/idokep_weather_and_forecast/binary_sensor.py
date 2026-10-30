@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 from typing import TYPE_CHECKING
 
 from homeassistant.components.binary_sensor import (
@@ -116,14 +116,14 @@ class IdokepBinarySensor(IdokepEntity, BinarySensorEntity):
 
     def _check_storm_expected_next_hour(self) -> bool:
         """Check if storm is expected in the next hour."""
-        now = datetime.datetime.now(datetime.UTC)
-        next_hour = now + datetime.timedelta(hours=1)
+        now = dt.datetime.now(dt.UTC)
+        next_hour = now + dt.timedelta(hours=1)
 
         for forecast in self.coordinator.data.get("hourly_forecast", []):
             # Conditions are already mapped to Home Assistant values
             if forecast.get("condition") in STORM_CONDITIONS:
                 try:
-                    forecast_dt = datetime.datetime.fromisoformat(
+                    forecast_dt = dt.datetime.fromisoformat(
                         forecast.get("datetime", "")
                     )
                     # Forecast times are Budapest local time when no offset given
@@ -134,7 +134,7 @@ class IdokepBinarySensor(IdokepEntity, BinarySensorEntity):
 
                     # Each forecast covers a one-hour slot; check it overlaps the
                     # next hour (this includes the slot we are currently in)
-                    slot_end = forecast_dt + datetime.timedelta(hours=1)
+                    slot_end = forecast_dt + dt.timedelta(hours=1)
                     if forecast_dt <= next_hour and slot_end > now:
                         return True
                 except (ValueError, TypeError):

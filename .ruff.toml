@@ -16,6 +16,7 @@ ignore = [
     "EXE001", # Shebang is present but file is not executable
     "EXE002", # The file is executable but no shebang is present
     "PLR0914", # Too many local variables
+    "CPY001", # Missing copyright notice (the LICENSE file covers the project)
 ]
 
 [lint.per-file-ignores]

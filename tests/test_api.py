@@ -1073,7 +1073,7 @@ class TestHourlyParserBranches:
             hour="16:00", angle=6
         ) + self.WIND_CARD_HTML.format(hour="17:00", angle=200)
         with patch(
-            "custom_components.idokep_weather_and_forecast.api.datetime.datetime",
+            "custom_components.idokep_weather_and_forecast.api.dt.datetime",
             FrozenDateTime,
         ):
             result = parser.parse(BeautifulSoup(html, "html.parser"))
@@ -1115,7 +1115,7 @@ class TestHourlyParserBranches:
             for index, hour in enumerate(hours)
         )
         with patch(
-            "custom_components.idokep_weather_and_forecast.api.datetime.datetime",
+            "custom_components.idokep_weather_and_forecast.api.dt.datetime",
             FrozenDateTime,
         ):
             return parser.parse(BeautifulSoup(html, "html.parser"))
@@ -1306,7 +1306,7 @@ class TestDailyParserBranches:
 
         html = '<div class="ik dailyForecastCol"></div>'
         with patch(
-            "custom_components.idokep_weather_and_forecast.api.datetime.datetime",
+            "custom_components.idokep_weather_and_forecast.api.dt.datetime",
             FrozenDateTime,
         ):
             result = parser.parse(BeautifulSoup(html, "html.parser"))
@@ -1605,7 +1605,7 @@ class TestTodayMinMax:
         """Parse today's max/min from html as if it were the given time."""
         soup = BeautifulSoup(html, "html.parser")
         with patch(
-            "custom_components.idokep_weather_and_forecast.api.datetime.datetime",
+            "custom_components.idokep_weather_and_forecast.api.dt.datetime",
             frozen_now(*now),
         ):
             return parser.parse_today_min_max(soup)
@@ -1652,7 +1652,7 @@ class TestTodayMinMax:
                 client._http_client, "get_html", AsyncMock(return_value=THU + FRI)
             ),
             patch(
-                "custom_components.idokep_weather_and_forecast.api.datetime.datetime",
+                "custom_components.idokep_weather_and_forecast.api.dt.datetime",
                 frozen_now(2026, 10, 29, 10, 0),
             ),
         ):
@@ -1687,7 +1687,7 @@ class TestDailyForecastDates:
         """Return the forecast dates parsed from html at the given time."""
         soup = BeautifulSoup(html, "html.parser")
         with patch(
-            "custom_components.idokep_weather_and_forecast.api.datetime.datetime",
+            "custom_components.idokep_weather_and_forecast.api.dt.datetime",
             frozen_now(*now),
         ):
             result = DailyForecastParser().parse(soup)
@@ -1712,7 +1712,7 @@ class TestDailyForecastDates:
         """Friday's high/low are reported for Friday, not for today."""
         soup = BeautifulSoup(FRI, "html.parser")
         with patch(
-            "custom_components.idokep_weather_and_forecast.api.datetime.datetime",
+            "custom_components.idokep_weather_and_forecast.api.dt.datetime",
             frozen_now(2026, 10, 29, 20, 51),
         ):
             item = DailyForecastParser().parse(soup)["daily_forecast"][0]
@@ -1746,7 +1746,7 @@ class TestDailyForecastDates:
 
         def dates_at(html: str, *now: int) -> list[str]:
             with patch(
-                "custom_components.idokep_weather_and_forecast.api.datetime.datetime",
+                "custom_components.idokep_weather_and_forecast.api.dt.datetime",
                 frozen_now(*now),
             ):
                 result = parser.parse(BeautifulSoup(html, "html.parser"))
@@ -1766,12 +1766,12 @@ class TestDailyForecastDates:
         """The kept entry has today's temperatures, condition etc."""
         parser = DailyForecastParser()
         with patch(
-            "custom_components.idokep_weather_and_forecast.api.datetime.datetime",
+            "custom_components.idokep_weather_and_forecast.api.dt.datetime",
             frozen_now(2026, 10, 29, 10, 0),
         ):
             first = parser.parse(BeautifulSoup(THU, "html.parser"))["daily_forecast"][0]
         with patch(
-            "custom_components.idokep_weather_and_forecast.api.datetime.datetime",
+            "custom_components.idokep_weather_and_forecast.api.dt.datetime",
             frozen_now(2026, 10, 29, 21, 0),
         ):
             kept = parser.parse(BeautifulSoup(FRI, "html.parser"))["daily_forecast"][0]
@@ -1787,7 +1787,7 @@ class TestDailyForecastDates:
         parser = DailyForecastParser()
         parser.restore_today_forecast({"datetime": "2026-10-29", "temperature": 16})
         with patch(
-            "custom_components.idokep_weather_and_forecast.api.datetime.datetime",
+            "custom_components.idokep_weather_and_forecast.api.dt.datetime",
             frozen_now(2026, 10, 29, 21, 0),
         ):
             result = parser.parse(BeautifulSoup(FRI, "html.parser"))

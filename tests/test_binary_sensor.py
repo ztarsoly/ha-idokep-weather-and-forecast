@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 from datetime import timedelta
 from unittest.mock import Mock
 
@@ -298,8 +298,8 @@ class TestIdokepBinarySensor:
 
     def test_storm_expected_next_hour_is_on(self, mock_coordinator: Mock) -> None:
         """Test storm_expected_1h sensor with storm in forecast."""
-        now = datetime.datetime.now(datetime.UTC)
-        next_30_min = now + datetime.timedelta(minutes=30)
+        now = dt.datetime.now(dt.UTC)
+        next_30_min = now + dt.timedelta(minutes=30)
 
         # Setup coordinator data with storm forecast
         mock_coordinator.data = {
@@ -322,8 +322,8 @@ class TestIdokepBinarySensor:
 
     def test_storm_expected_next_hour_is_off(self, mock_coordinator: Mock) -> None:
         """Test storm_expected_1h sensor with no storm in forecast."""
-        now = datetime.datetime.now(datetime.UTC)
-        in_two_hours = now + datetime.timedelta(hours=2)
+        now = dt.datetime.now(dt.UTC)
+        in_two_hours = now + dt.timedelta(hours=2)
 
         # Setup coordinator data with storm forecast beyond 1 hour
         mock_coordinator.data = {
@@ -381,7 +381,7 @@ class TestIdokepBinarySensor:
     ) -> None:
         """Test storm detection with timezone-naive datetime in forecast."""
         # Naive forecast times are Budapest local time
-        now = datetime.datetime.now(TimeUtils.get_local_timezone())
+        now = dt.datetime.now(TimeUtils.get_local_timezone())
         # Create a timezone-naive datetime string for 30 minutes from now
         future_time = now + timedelta(minutes=30)
         naive_datetime_str = future_time.replace(tzinfo=None).isoformat()
@@ -410,7 +410,7 @@ class TestIdokepBinarySensor:
         """Naive local times must not be shifted by the UTC offset."""
         local_tz = TimeUtils.get_local_timezone()
         # A slot that ended 30 minutes ago in local time
-        past = datetime.datetime.now(local_tz) - timedelta(minutes=90)
+        past = dt.datetime.now(local_tz) - timedelta(minutes=90)
         mock_coordinator.data = {
             "hourly_forecast": [
                 {
@@ -427,7 +427,7 @@ class TestIdokepBinarySensor:
 
     def test_storm_in_current_hour_slot_is_on(self, mock_coordinator: Mock) -> None:
         """A storm in the hour slot that has already started counts."""
-        now = datetime.datetime.now(datetime.UTC)
+        now = dt.datetime.now(dt.UTC)
         slot_start = now - timedelta(minutes=20)
         mock_coordinator.data = {
             "hourly_forecast": [
@@ -442,7 +442,7 @@ class TestIdokepBinarySensor:
 
     def test_storm_ignores_non_storm_conditions(self, mock_coordinator: Mock) -> None:
         """Non-storm conditions do not trigger the sensor."""
-        now = datetime.datetime.now(datetime.UTC)
+        now = dt.datetime.now(dt.UTC)
         mock_coordinator.data = {
             "hourly_forecast": [
                 {
