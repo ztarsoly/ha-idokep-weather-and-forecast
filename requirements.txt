@@ -1,5 +1,9 @@
-colorlog==6.10.1
+# Development and CI: run the tests and ruff
 homeassistant==2025.12.5
-pip>=26.2.2
-ruff==0.17.3
 beautifulsoup4
+ruff==0.17.3
+pytest
+pytest-asyncio
+pytest-cov
+# pycares 5 breaks the aiodns version Home Assistant uses
+pycares<5
