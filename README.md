@@ -120,21 +120,6 @@ Az előrejelzési oldalak legutóbbi sikeres adatai a Home Assistant `config/.st
 - Az idokep.hu az óránkénti előrejelzést a következő órától listázza; az aktuális óra egy korábbi lekérdezésből megmarad, így az előrejelzés az aktuális órával kezdődik (közvetlenül az első telepítés után még a következő órával).
 - Az állomásadatok az idokep.hu grafikonjai mögötti adatfájlból származnak, ami nem hivatalos felület, és megváltozhat.
 
-## Fejlesztés
-
-A tesztek a `tests/` mappában vannak:
-
-```bash
-pip install -r requirements.txt -r test-requirements.txt
-pytest
-```
-
-A `requirements.txt` a Home Assistant 2025.12.5 verziót telepíti, a tesztek ezzel futnak.
-
-A kód stílusát a [ruff](https://docs.astral.sh/ruff/) ellenőrzi (`ruff check .` és `ruff format .`).
-
-Hibát vagy javaslatot az [Issues](https://github.com/ztarsoly/ha-idokep-weather-and-forecast/issues) oldalon jelezhetsz.
-
 ## Köszönetnyilvánítás
 
 Ez az integráció [FabianGabor](https://github.com/FabianGabor) [HA-Idokep](https://github.com/FabianGabor/HA-Idokep) integrációjára épül. Köszönet az eredeti munkáért!
