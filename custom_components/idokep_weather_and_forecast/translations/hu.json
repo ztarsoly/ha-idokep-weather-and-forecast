@@ -157,8 +157,9 @@
         "step": {
             "init": {
                 "title": "Beállítások",
-                "description": "Település: a név úgy, ahogy az idokep.hu címében szerepel (pl. Budapest). Időjárás-állomás: egy idokep.hu automata kódja, ahogy a címében szerepel (pl. jozsamet). Törölve az időjárás-állomás eszköz megszűnik.",
+                "description": "Név: a bejegyzés neve; az eszközök neve is módosul, ha tartalmazza. Település: a név úgy, ahogy az idokep.hu címében szerepel (pl. Budapest). Időjárás-állomás: egy idokep.hu automata kódja, ahogy a címében szerepel (pl. jozsamet). Törölve az időjárás-állomás eszköz megszűnik.",
                 "data": {
+                    "name": "Név",
                     "location": "Település",
                     "station": "Időjárás-állomás kódja (nem kötelező)"
                 }
@@ -169,7 +170,8 @@
             "station_connection": "Az idokep.hu nem érhető el. Ellenőrizd a kapcsolatot.",
             "connection": "Nem sikerült időjárási adatot lekérni ehhez a településhez. Ellenőrizd a nevet és a kapcsolatot.",
             "unknown": "Ismeretlen hiba történt.",
-            "already_configured": "Ez a település már egy másik bejegyzésben be van állítva."
+            "already_configured": "Ez a település már egy másik bejegyzésben be van állítva.",
+            "name": "Adj meg egy nevet."
         }
     }
 }

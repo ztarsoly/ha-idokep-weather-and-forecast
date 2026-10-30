@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, call, patch
 
 import pytest
 import voluptuous as vol
@@ -60,14 +60,15 @@ def _patch_checks(
 
 
 @pytest.mark.asyncio
-async def test_form_shows_current_location_and_station() -> None:
-    """The dialog has the location and the station code, filled in."""
+async def test_form_shows_current_name_location_and_station() -> None:
+    """The dialog has the name, the location and the station code, filled in."""
     flow, _ = _flow()
     result = await flow.async_step_init()
 
     assert result["type"] == FlowResultType.FORM
     schema = {str(key): key for key in result["data_schema"].schema}
-    assert list(schema) == ["location", "station"]
+    assert list(schema) == ["name", "location", "station"]
+    assert schema["name"].default() == "Debrecen-Józsa"
     assert schema["location"].default() == "Debrecen-Józsa"
     assert schema["station"].description == {"suggested_value": "jozsamet"}
 
@@ -79,7 +80,7 @@ async def test_same_location_only_saves_station() -> None:
     location_check, station_check = _patch_checks()
     with location_check as check_location, station_check:
         result = await flow.async_step_init(
-            {"location": "Debrecen-Józsa", "station": "ha0kaistvan"}
+            {"name": "Debrecen-Józsa", "location": "Debrecen-Józsa", "station": "ha0kaistvan"}
         )
 
     assert result["type"] == FlowResultType.CREATE_ENTRY
@@ -95,7 +96,7 @@ async def test_new_location_updates_entry() -> None:
     location_check, station_check = _patch_checks()
     with location_check, station_check:
         result = await flow.async_step_init(
-            {"location": " Debrecen ", "station": "jozsamet"}
+            {"name": "Debrecen-Józsa", "location": " Debrecen ", "station": "jozsamet"}
         )
 
     assert result["type"] == FlowResultType.CREATE_ENTRY
@@ -115,7 +116,7 @@ async def test_new_location_with_new_station_reloads_once() -> None:
     flow, _ = _flow(options={"station": "jozsamet"})
     location_check, station_check = _patch_checks()
     with location_check, station_check:
-        await flow.async_step_init({"location": "Debrecen", "station": "ha0kaistvan"})
+        await flow.async_step_init({"name": "Debrecen-Józsa", "location": "Debrecen", "station": "ha0kaistvan"})
 
     flow.hass.config_entries.async_schedule_reload.assert_not_called()
 
@@ -127,7 +128,7 @@ async def test_location_of_another_entry_is_refused() -> None:
     location_check, station_check = _patch_checks()
     with location_check, station_check:
         result = await flow.async_step_init(
-            {"location": "Budapest", "station": "jozsamet"}
+            {"name": "Debrecen-Józsa", "location": "Budapest", "station": "jozsamet"}
         )
 
     assert result["type"] == FlowResultType.FORM
@@ -141,7 +142,7 @@ async def test_unknown_location_is_refused() -> None:
     flow, _ = _flow()
     location_check, station_check = _patch_checks(location_error="connection")
     with location_check, station_check:
-        result = await flow.async_step_init({"location": "Nowhere", "station": ""})
+        result = await flow.async_step_init({"name": "Debrecen-Józsa", "location": "Nowhere", "station": ""})
 
     assert result["type"] == FlowResultType.FORM
     assert result["errors"] == {"base": "connection"}
@@ -154,11 +155,86 @@ async def test_bad_station_does_not_move_location() -> None:
     flow, _ = _flow()
     location_check, station_check = _patch_checks(station_error="station")
     with location_check, station_check:
-        result = await flow.async_step_init({"location": "Debrecen", "station": "x"})
+        result = await flow.async_step_init({"name": "Debrecen-Józsa", "location": "Debrecen", "station": "x"})
 
     assert result["errors"] == {"station": "station"}
     flow.hass.config_entries.async_update_entry.assert_not_called()
 
+
+
+def _devices(*names: tuple[str, str | None]) -> list[Mock]:
+    """Return device mocks with (name, name_by_user)."""
+    devices = []
+    for i, (name, by_user) in enumerate(names):
+        device = Mock(id=f"device{i}", name_by_user=by_user)
+        device.name = name  # Mock(name=...) would name the mock itself
+        devices.append(device)
+    return devices
+
+
+@pytest.mark.asyncio
+async def test_new_name_renames_entry_and_devices() -> None:
+    """A new name becomes the title; device names containing the old one follow."""
+    flow, entry = _flow(title="Home", options={"station": "jozsamet"})
+    devices = _devices(
+        ("Home Forecast", None),  # default name
+        ("Home Weather", "Home Weather station"),  # renamed, still has "Home"
+        ("Home Weather", "Garden station"),  # renamed without the entry name
+    )
+    location_check, station_check = _patch_checks()
+    with (
+        location_check,
+        station_check,
+        patch.object(config_flow.dr, "async_get") as get_registry,
+        patch.object(
+            config_flow.dr, "async_entries_for_config_entry", return_value=devices
+        ),
+    ):
+        result = await flow.async_step_init(
+            {"name": " Cottage ", "location": "Debrecen-Józsa", "station": "jozsamet"}
+        )
+
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    flow.hass.config_entries.async_update_entry.assert_called_once_with(
+        entry, title="Cottage"
+    )
+    registry = get_registry.return_value
+    assert registry.async_update_device.call_args_list == [
+        call("device0", name="Cottage Forecast"),
+        call("device1", name="Cottage Weather", name_by_user="Cottage Weather station"),
+        call("device2", name="Cottage Weather"),
+    ]
+    # Only the name changed, so the flow reloads the entry itself
+    flow.hass.config_entries.async_schedule_reload.assert_called_once_with("entry1")
+
+
+@pytest.mark.asyncio
+async def test_unchanged_name_and_location_change_nothing() -> None:
+    """With the same name and location only the station option is saved."""
+    flow, _ = _flow()
+    location_check, station_check = _patch_checks()
+    with location_check, station_check:
+        await flow.async_step_init(
+            {"name": "Debrecen-Józsa", "location": "Debrecen-Józsa", "station": ""}
+        )
+
+    flow.hass.config_entries.async_update_entry.assert_not_called()
+    flow.hass.config_entries.async_schedule_reload.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_blank_name_is_refused_in_configure() -> None:
+    """A name of only spaces is refused and nothing is changed."""
+    flow, _ = _flow()
+    location_check, station_check = _patch_checks()
+    with location_check, station_check:
+        result = await flow.async_step_init(
+            {"name": "  ", "location": "Debrecen", "station": "jozsamet"}
+        )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"] == {"name": "name"}
+    flow.hass.config_entries.async_update_entry.assert_not_called()
 
 # ---- new entry ---------------------------------------------------------------
 

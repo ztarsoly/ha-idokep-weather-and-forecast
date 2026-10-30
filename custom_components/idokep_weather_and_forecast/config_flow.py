@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_NAME
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from slugify import slugify
@@ -35,6 +36,18 @@ class WeatherDataFetchError(ValueError):
         """Initialize WeatherDataFetchError with the given location."""
         msg = f"Could not fetch weather data for {location}"
         super().__init__(msg)
+
+
+def _name_field(default: str | None) -> dict[vol.Required, Any]:
+    """Return the entry name field of a form."""
+    return {
+        vol.Required(
+            CONF_NAME,
+            default=default or vol.UNDEFINED,
+        ): selector.TextSelector(
+            selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT),
+        ),
+    }
 
 
 def _location_field(default: str | None) -> dict[vol.Required, Any]:
@@ -146,14 +159,7 @@ class IdokepFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=vol.Schema(
                 {
-                    vol.Required(
-                        CONF_NAME,
-                        default=(user_input or {}).get(CONF_NAME) or vol.UNDEFINED,
-                    ): selector.TextSelector(
-                        selector.TextSelectorConfig(
-                            type=selector.TextSelectorType.TEXT,
-                        ),
-                    ),
+                    **_name_field((user_input or {}).get(CONF_NAME)),
                     **_location_field((user_input or {}).get(LOCATION)),
                     **_station_field((user_input or {}).get(STATION)),
                 },
@@ -175,7 +181,7 @@ class IdokepFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class IdokepOptionsFlow(config_entries.OptionsFlowWithReload):
-    """Change a location entry's location and weather station."""
+    """Change a location entry's name, location and weather station."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         """Initialize the options flow."""
@@ -184,28 +190,35 @@ class IdokepOptionsFlow(config_entries.OptionsFlowWithReload):
     async def async_step_init(
         self, user_input: dict | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Ask for the location and the station code (empty removes the station)."""
+        """Ask for the name, the location and the station code."""
         errors: dict[str, str] = {}
+        name = self._entry.title
         location = self._entry.data[LOCATION]
         code = station_code(self._entry)
         if user_input is not None:
+            name = (user_input.get(CONF_NAME) or "").strip()
             location = user_input[LOCATION].strip()
             code = (user_input.get(STATION) or "").strip() or None
+            if not name:
+                errors[CONF_NAME] = "name"
             if location != self._entry.data[LOCATION]:
                 errors.update(await self._async_location_errors(location))
             if not errors and (error := await _async_station_error(self.hass, code)):
                 errors[STATION] = error
             if not errors:
                 options = {STATION: code or ""}
-                if location != self._entry.data[LOCATION]:
-                    self._async_move_to(location, options)
+                self._async_update_entry(name, location, options)
                 # Reloaded afterwards, which adds or removes the station device
                 return self.async_create_entry(data=options)
 
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
-                {**_location_field(location), **_station_field(code)}
+                {
+                    **_name_field(name),
+                    **_location_field(location),
+                    **_station_field(code),
+                }
             ),
             errors=errors,
         )
@@ -222,16 +235,40 @@ class IdokepOptionsFlow(config_entries.OptionsFlowWithReload):
             return {"base": error}
         return {}
 
-    def _async_move_to(self, location: str, options: dict[str, str]) -> None:
-        """Switch the entry to another location (its name stays the same)."""
+    def _async_update_entry(
+        self, name: str, location: str, options: dict[str, str]
+    ) -> None:
+        """Apply a new name and location (the station is saved as an option)."""
         entry = self._entry
-        # The title (the name given in the config flow) is kept, and so are
-        # the device names "<name> Forecast" and "<name> Weather"
-        self.hass.config_entries.async_update_entry(
-            entry,
-            data={**entry.data, LOCATION: location},
-            unique_id=slugify(location),
-        )
+        changes: dict[str, Any] = {}
+        if name != entry.title:
+            self._async_rename_devices(entry.title, name)
+            changes["title"] = name
+        if location != entry.data[LOCATION]:
+            changes["data"] = {**entry.data, LOCATION: location}
+            changes["unique_id"] = slugify(location)
+        if not changes:
+            return
+        self.hass.config_entries.async_update_entry(entry, **changes)
         if options == dict(entry.options):
             # Options unchanged, so the automatic reload won't happen
             self.hass.config_entries.async_schedule_reload(entry.entry_id)
+
+    def _async_rename_devices(self, old: str, new: str) -> None:
+        """
+        Put the new entry name into the entry's device names.
+
+        Covers "<name> Forecast" and "<name> Weather", also when renamed by
+        the user, as long as the name still contains the old entry name.
+        """
+        registry = dr.async_get(self.hass)
+        for device in dr.async_entries_for_config_entry(
+            registry, self._entry.entry_id
+        ):
+            changes = {
+                field: value.replace(old, new)
+                for field in ("name", "name_by_user")
+                if (value := getattr(device, field)) and old in value
+            }
+            if changes:
+                registry.async_update_device(device.id, **changes)

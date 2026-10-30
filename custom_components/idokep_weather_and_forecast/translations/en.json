@@ -157,8 +157,9 @@
         "step": {
             "init": {
                 "title": "Configuration",
-                "description": "Settlement: the name as it appears in idokep.hu URLs (e.g. Budapest). Weather station: the code of an idokep.hu weather station, as in its page address (e.g. jozsamet). Clear it to remove the weather station device.",
+                "description": "Name: the name of this entry; device names that contain it are renamed too. Settlement: the name as it appears in idokep.hu URLs (e.g. Budapest). Weather station: the code of an idokep.hu weather station, as in its page address (e.g. jozsamet). Clear it to remove the weather station device.",
                 "data": {
+                    "name": "Name",
                     "location": "Settlement",
                     "station": "Weather station code (optional)"
                 }
@@ -169,7 +170,8 @@
             "station_connection": "Could not reach idokep.hu. Check your connection.",
             "connection": "Could not fetch weather data for this settlement. Check the name and your connection.",
             "unknown": "Unknown error occurred.",
-            "already_configured": "This settlement is already configured in another entry."
+            "already_configured": "This settlement is already configured in another entry.",
+            "name": "Enter a name."
         }
     }
 }
