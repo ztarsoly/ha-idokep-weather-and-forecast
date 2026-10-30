@@ -1,122 +1,61 @@
 name: Release
 
+# Publishes a GitHub release (which HACS offers as an update) when a tag is
+# pushed. The tag must equal the version in manifest.json, e.g.:
+#   git tag 1.01 && git push origin 1.01
+
 on:
   push:
-    branches: [main]
-    paths: ['custom_components/idokep_weather_and_forecast/manifest.json']
+    tags:
+      - "*"
+
+permissions:
+  contents: write
 
 jobs:
-  validate-and-release:
+  release:
+    name: "Release"
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6.0.2
-        with:
-          fetch-depth: 0  # Full history for better changelog
+      - name: Checkout the repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Get version info
-        id: version
+      - name: Check the tag matches the manifest version
         run: |
-          VERSION=$(cat custom_components/idokep_weather_and_forecast/manifest.json | jq -r '.version')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-          # Check if this version already exists as a tag
-          if git rev-parse "$VERSION" >/dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-            echo "❌ Version $VERSION already exists as a tag!"
+          VERSION=$(jq -r '.version' custom_components/idokep_weather_and_forecast/manifest.json)
+          if [ "$VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match manifest.json version $VERSION"
             exit 1
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-            echo "✅ New version $VERSION detected"
           fi
 
-      - name: Setup Python
-        uses: actions/setup-python@v6.2.0
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
-          python-version: '3.13'
+          python-version: "3.13"
+          cache: "pip"
 
-      - name: Install dependencies and run tests
+      - name: Run tests
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -r test-requirements.txt
-          python -m pytest tests/ -v
+          pip install -r requirements.txt -r test-requirements.txt
+          python -m pytest tests/
 
-      - name: Validate HACS
-        uses: hacs/action@main
+      - name: HACS validation
+        uses: hacs/action@d556e736723344f83838d08488c983a15381059a # 22.5.0
         with:
           category: integration
 
-      - name: Create release assets
+      - name: Build the zip
         run: |
-          # Create a clean copy for release
-          mkdir -p dist/custom_components
-          cp -r custom_components/idokep_weather_and_forecast dist/custom_components/
+          cd custom_components
+          zip -r "../idokep_weather_and_forecast-$GITHUB_REF_NAME.zip" idokep_weather_and_forecast \
+            -x "*/__pycache__/*" "*.pyc"
 
-          # Remove development files
-          find dist/custom_components/idokep_weather_and_forecast -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
-          find dist/custom_components/idokep_weather_and_forecast -name "*.pyc" -delete
-          find dist/custom_components/idokep_weather_and_forecast -name ".pytest_cache" -type d -exec rm -rf {} + 2>/dev/null || true
-
-          # Create zip
-          cd dist
-          zip -r ../idokep_weather_and_forecast-${{ steps.version.outputs.version }}.zip custom_components/idokep_weather_and_forecast/
-
-      - name: Generate changelog
-        id: changelog
-        run: |
-          # Get last tag
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-
-          {
-            echo "CHANGELOG<<EOF"
-            echo "## 🚀 What's New in v${{ steps.version.outputs.version }}"
-            echo ""
-
-            if [ -n "$LAST_TAG" ]; then
-              echo "### 📋 Changes since $LAST_TAG"
-              git log --pretty=format:"- %s (%h)" "$LAST_TAG"..HEAD --no-merges | head -20
-            else
-              echo "### 📋 Initial Release"
-              echo "- Initial release of Időkép Weather & Forecast integration"
-            fi
-
-            echo ""
-            echo "## 📦 Installation"
-            echo ""
-            echo "### 🏠 HACS (Recommended)"
-            echo "1. Open HACS in Home Assistant"
-            echo "2. Go to Integrations"
-            echo "3. Search for 'Időkép Weather & Forecast'"
-            echo "4. Download and restart Home Assistant"
-            echo "5. Add the integration via Settings → Devices & Services"
-            echo ""
-            echo "### 📁 Manual Installation"
-            echo "1. Download \`idokep_weather_and_forecast-${{ steps.version.outputs.version }}.zip\`"
-            echo "2. Extract to \`<config>/custom_components/\`"
-            echo "3. Restart Home Assistant"
-            echo ""
-            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/$LAST_TAG...v${{ steps.version.outputs.version }}"
-            echo "EOF"
-          } >> $GITHUB_OUTPUT
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.version.outputs.version }}
-          name: "Időkép Weather & Forecast v${{ steps.version.outputs.version }}"
-          body: ${{ steps.changelog.outputs.CHANGELOG }}
-          files: |
-            idokep_weather_and_forecast-${{ steps.version.outputs.version }}.zip
-          draft: false
-          prerelease: false
+      - name: Create the release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Success notification
+          GH_TOKEN: ${{ github.token }}
         run: |
-          echo "🎉 Release v${{ steps.version.outputs.version }} created successfully!"
-          echo "📦 HACS users will be notified automatically"
-          echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.version }}"
+          gh release create "$GITHUB_REF_NAME" \
+            "idokep_weather_and_forecast-$GITHUB_REF_NAME.zip" \
+            --title "Időkép Weather & Forecast $GITHUB_REF_NAME" \
+            --generate-notes
