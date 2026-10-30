@@ -35,3 +35,7 @@ Ha hibát találsz vagy javaslatod van, nyiss egy issue-t a GitHub repóban!
 - **Gyors tesztelés**: Lásd [FAST_TESTING_GUIDE.md](FAST_TESTING_GUIDE.md) a gyors fejlesztői workflow-hoz
 - **Teljes tesztelés**: Lásd [TEST_RUNNER_GUIDE.md](TEST_RUNNER_GUIDE.md) a részletes tesztelési útmutatóhoz
 - **Optimalizált workflow**: Lásd [OPTIMIZED_WORKFLOW_GUIDE.md](OPTIMIZED_WORKFLOW_GUIDE.md)
+
+## Köszönetnyilvánítás
+
+Ez az integráció [FabianGabor](https://github.com/FabianGabor) [HA-Idokep](https://github.com/FabianGabor/HA-Idokep) integrációjára épül. Köszönet az eredeti munkáért!
