@@ -12,5 +12,5 @@
   "requirements": [
     "beautifulsoup4"
   ],
-  "version": "1.00"
+  "version": "1.0.1"
 }
