@@ -72,7 +72,7 @@ async def _async_location_error(hass: HomeAssistant, location: str) -> str | Non
     except (ValueError, IdokepApiClientError) as exception:
         LOGGER.error(exception)
         return "connection"
-    except Exception:  # noqa: BLE001
+    except Exception:
         LOGGER.exception("Unexpected error validating location")
         return "unknown"
     return None

@@ -361,7 +361,7 @@ class TestNeededSources:
 class FakeStore:
     """Stand-in for Home Assistant's Store: keeps the file content in memory."""
 
-    files: dict[str, object] = {}  # noqa: RUF012 - shared "disk" for a test
+    files: dict[str, object] = {}  # shared "disk" for a test
 
     def __init__(self, _hass: object, _version: int, key: str) -> None:
         """Open the "file" for key."""

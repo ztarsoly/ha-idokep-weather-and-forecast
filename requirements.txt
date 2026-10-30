@@ -1,7 +1,6 @@
-# Development and CI: run the tests and ruff
+# Development and CI: run the tests
 homeassistant==2025.12.5
 beautifulsoup4
-ruff==0.17.3
 pytest
 pytest-asyncio
 pytest-cov
