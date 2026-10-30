@@ -111,6 +111,7 @@ class TestIdokepSensorEntityDescriptions:
 class TestAsyncSetupEntry:
     """Test the async_setup_entry function."""
 
+    @pytest.mark.asyncio
     async def test_async_setup_entry_creates_all_sensors(self) -> None:
         """Test that async_setup_entry creates all expected sensors."""
         hass = Mock(spec=HomeAssistant)
