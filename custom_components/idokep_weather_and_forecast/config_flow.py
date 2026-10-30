@@ -68,7 +68,7 @@ async def _async_location_error(hass: HomeAssistant, location: str) -> str | Non
         # Only the current conditions page is needed to validate the location
         data = await client.async_get_current_weather(location)
         if "temperature" not in data:
-            raise WeatherDataFetchError(location)  # noqa: TRY301
+            raise WeatherDataFetchError(location)
     except (ValueError, IdokepApiClientError) as exception:
         LOGGER.error(exception)
         return "connection"

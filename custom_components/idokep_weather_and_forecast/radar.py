@@ -113,7 +113,7 @@ async def fetch_frame(
             asyncio.timeout(TIMEOUT),
             session.get(url, headers=headers) as response,
         ):
-            if response.status == 304:  # noqa: PLR2004 - HTTP Not Modified
+            if response.status == 304:  # HTTP Not Modified
                 return None
             response.raise_for_status()
             return Frame(await response.read(), response.headers.get("Last-Modified"))

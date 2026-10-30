@@ -201,7 +201,7 @@ def _coordinator() -> StationCoordinator:
     ("minute", "last_ok", "fetches"),
     [(0, True, True), (5, True, True), (3, True, False), (3, False, True)],
 )
-async def test_tick_schedule(minute: int, last_ok: bool, fetches: bool) -> None:  # noqa: FBT001
+async def test_tick_schedule(minute: int, last_ok: bool, fetches: bool) -> None:
     """Fetch on every 5th minute; in between only to retry a failure."""
     coordinator = _coordinator()
     coordinator.last_update_success = last_ok

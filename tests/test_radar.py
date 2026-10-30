@@ -122,7 +122,7 @@ async def test_fetch_frame_unchanged_returns_none() -> None:
 @pytest.mark.asyncio
 async def test_fetch_frame_error() -> None:
     """Network errors become IdokepApiClientCommunicationError."""
-    import aiohttp  # noqa: PLC0415
+    import aiohttp
 
     session = Mock()
     session.get = Mock(side_effect=aiohttp.ClientError("down"))
@@ -201,7 +201,7 @@ def gif_frames(gif: bytes) -> int:
 
 
 @pytest.fixture(autouse=True)
-def fake_fetch(site: FakeSite):  # noqa: ANN201
+def fake_fetch(site: FakeSite):
     """Route frame downloads to the fake site."""
     with patch(
         "custom_components.idokep_weather_and_forecast.radar.fetch_frame", site.fetch
