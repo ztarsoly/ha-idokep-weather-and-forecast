@@ -2,13 +2,13 @@
   "domain": "idokep_weather_and_forecast",
   "name": "Időkép Weather & Forecast",
   "codeowners": [
-    "@FabianGabor"
+    "@ztarsoly"
   ],
   "config_flow": true,
-  "documentation": "https://github.com/FabianGabor/HA-Idokep",
+  "documentation": "https://github.com/ztarsoly/ha-idokep-weather-and-forecast",
   "integration_type": "service",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/FabianGabor/HA-Idokep/issues",
+  "issue_tracker": "https://github.com/ztarsoly/ha-idokep-weather-and-forecast/issues",
   "requirements": [
     "beautifulsoup4"
   ],
