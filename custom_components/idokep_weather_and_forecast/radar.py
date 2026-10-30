@@ -52,6 +52,9 @@ LAST_FRAME_MS = 2000
 # Regular checks on every 5th minute; in between only while waiting for a
 # frame (the timer fires every minute, at second 59)
 CHECK_EVERY_MINUTES = 5
+# The radar*.jpg files (840×626) are horizontally squeezed; idokep.hu shows
+# the same map 970×648 (its radar video). Frames are widened to that aspect.
+MAP_ASPECT = 970 / 648
 
 
 @dataclass
@@ -63,9 +66,19 @@ class RadarImage:
     updated: datetime
 
 
+def _unsqueeze(image: Image.Image) -> Image.Image:
+    """Return the frame widened to the map's real aspect (height kept)."""
+    width = round(image.height * MAP_ASPECT)
+    if width == image.width:
+        return image
+    return image.resize((width, image.height), Image.Resampling.LANCZOS)
+
+
 def build_gif(frames: list[bytes]) -> bytes:
     """Return a looping GIF of the JPEG frames (given oldest first)."""
-    images = [Image.open(io.BytesIO(frame)).convert("RGB") for frame in frames]
+    images = [
+        _unsqueeze(Image.open(io.BytesIO(frame)).convert("RGB")) for frame in frames
+    ]
     # One palette for all frames, so the map doesn't flicker between frames
     sheet = Image.new("RGB", (images[0].width, images[0].height * len(images)))
     for i, image in enumerate(images):

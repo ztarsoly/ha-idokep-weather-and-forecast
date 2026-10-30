@@ -79,6 +79,15 @@ def test_build_gif_is_a_looping_animation() -> None:
     assert gif.info["duration"] == LAST_FRAME_MS
 
 
+def test_build_gif_unsqueezes_frames() -> None:
+    """Squeezed 840×626 frames are widened to idokep.hu's 970:648 map aspect."""
+    buffer = io.BytesIO()
+    Image.new("RGB", (840, 626), (10, 20, 30)).save(buffer, format="JPEG")
+    gif = Image.open(io.BytesIO(build_gif([buffer.getvalue()] * 2)))
+
+    assert gif.size == (937, 626)
+
+
 # ---------------------------------------------------------------------------
 # Frame fetching
 # ---------------------------------------------------------------------------
