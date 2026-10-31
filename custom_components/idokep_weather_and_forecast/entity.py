@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from urllib.parse import quote
 
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import MANUFACTURER
+from .api import IdokepConfig
+from .const import LOCATION, MANUFACTURER
 from .coordinator import IdokepDataUpdateCoordinator
 from .station import STATION_PAGE_URL, StationCoordinator, station_identifier
 
@@ -18,6 +20,12 @@ if TYPE_CHECKING:
 def device_name(config_entry: ConfigEntry) -> str:
     """Return the device name: the entry's name + "Forecast"."""
     return f"{config_entry.title} Forecast"
+
+
+def forecast_page_url(config_entry: ConfigEntry) -> str:
+    """Return the settlement's idokep.hu page (the Forecast device's link)."""
+    location = quote(config_entry.data.get(LOCATION, ""), safe="")
+    return IdokepConfig.get_current_weather_url(location)
 
 
 class IdokepEntity(CoordinatorEntity[IdokepDataUpdateCoordinator]):
@@ -44,6 +52,7 @@ class IdokepEntity(CoordinatorEntity[IdokepDataUpdateCoordinator]):
                 ),
             },
             name=device_name(coordinator.config_entry),
+            configuration_url=forecast_page_url(coordinator.config_entry),
         )
 
 

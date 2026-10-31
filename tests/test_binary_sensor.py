@@ -42,6 +42,7 @@ class TestIdokepBinarySensor:
         mock_hass = Mock(spec=HomeAssistant)
         mock_entry = Mock()
         mock_coordinator = Mock()
+        mock_coordinator.config_entry.data = {"location": "Budapest"}
         mock_entry.runtime_data.coordinator = mock_coordinator
         mock_async_add_entities = Mock()
 

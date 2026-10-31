@@ -18,7 +18,7 @@ from homeassistant.helpers import sun
 
 from .const import ATTRIBUTION, DOMAIN, MANUFACTURER
 from .coordinator import CURRENT, HOURLY
-from .entity import IdokepEntity, device_name
+from .entity import IdokepEntity, device_name, forecast_page_url
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -45,6 +45,7 @@ class IdokepWeatherEntity(IdokepEntity, WeatherEntity):
             "manufacturer": MANUFACTURER,
             "model": "Weather forecast",
             "entry_type": "service",
+            "configuration_url": forecast_page_url(self.coordinator.config_entry),
         }
 
     @property

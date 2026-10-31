@@ -59,9 +59,20 @@ class TestIdokepWeatherEntity:
             "manufacturer": "Időkép",
             "model": "Weather forecast",
             "entry_type": "service",
+            "configuration_url": "https://www.idokep.hu/idojaras/Budapest",
         }
 
         assert device_info == expected_device_info
+
+    def test_device_link_is_the_settlement_page(self, mock_coordinator: Mock) -> None:
+        """The Visit link is the settlement's idokep.hu page, URL-encoded."""
+        mock_coordinator.config_entry.data = {"location": "Debrecen-Józsa"}
+        entity = IdokepWeatherEntity(mock_coordinator)
+
+        url = "https://www.idokep.hu/idojaras/Debrecen-J%C3%B3zsa"
+        assert entity.device_info["configuration_url"] == url
+        # The sensors' shared device info carries the same link
+        assert entity._attr_device_info["configuration_url"] == url
 
     def test_has_entity_name_property(self, mock_coordinator: Mock) -> None:
         """Test has_entity_name property returns True."""

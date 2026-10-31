@@ -117,6 +117,7 @@ class TestAsyncSetupEntry:
         hass = Mock(spec=HomeAssistant)
         entry = Mock()
         entry.runtime_data.coordinator = Mock()
+        entry.runtime_data.coordinator.config_entry.data = {"location": "Budapest"}
         entry.runtime_data.coordinator.config_entry.entry_id = "test_entry"
         entry.runtime_data.station = None
         async_add_entities = Mock()
@@ -139,6 +140,7 @@ class TestIdokepSensor:
     def test_has_entity_name(self) -> None:
         """Test that has_entity_name returns True."""
         coordinator = Mock()
+        coordinator.config_entry.data = {"location": "Budapest"}
         entity_desc = SensorEntityDescription(key="test", translation_key="test")
         sensor = IdokepSensor(coordinator, entity_desc)
         assert sensor.has_entity_name is True
@@ -146,6 +148,7 @@ class TestIdokepSensor:
     def test_initialization(self) -> None:
         """Test sensor initialization."""
         coordinator = Mock()
+        coordinator.config_entry.data = {"location": "Budapest"}
         coordinator.config_entry.entry_id = "test_entry"
         entity_desc = SensorEntityDescription(
             key="temperature", translation_key="temperature"
@@ -160,6 +163,7 @@ class TestIdokepSensor:
     def test_native_value_condition_in_options(self) -> None:
         """A known condition is passed through for the frontend to translate."""
         coordinator = Mock()
+        coordinator.config_entry.data = {"location": "Budapest"}
         coordinator.data = {"condition": "partlycloudy"}
         condition_desc = next(
             desc for desc in ENTITY_DESCRIPTIONS if desc.key == "condition"
@@ -170,6 +174,7 @@ class TestIdokepSensor:
     def test_native_value_unmapped_condition_is_none(self) -> None:
         """An unmapped ("unknown") condition becomes None, not an invalid option."""
         coordinator = Mock()
+        coordinator.config_entry.data = {"location": "Budapest"}
         coordinator.data = {"condition": "unknown"}
         condition_desc = next(
             desc for desc in ENTITY_DESCRIPTIONS if desc.key == "condition"
@@ -180,6 +185,7 @@ class TestIdokepSensor:
     def test_native_value_string(self) -> None:
         """Test native_value with string data."""
         coordinator = Mock()
+        coordinator.config_entry.data = {"location": "Budapest"}
         coordinator.data = {"temperature": "20.5"}
         entity_desc = SensorEntityDescription(
             key="temperature", translation_key="temperature"
@@ -191,6 +197,7 @@ class TestIdokepSensor:
     def test_native_value_number(self) -> None:
         """Test native_value with numeric data."""
         coordinator = Mock()
+        coordinator.config_entry.data = {"location": "Budapest"}
         coordinator.data = {"temperature": 20.5}
         entity_desc = SensorEntityDescription(
             key="temperature", translation_key="temperature"
@@ -202,6 +209,7 @@ class TestIdokepSensor:
     def test_native_value_none(self) -> None:
         """Test native_value when data is missing."""
         coordinator = Mock()
+        coordinator.config_entry.data = {"location": "Budapest"}
         coordinator.data = {}
         entity_desc = SensorEntityDescription(
             key="temperature", translation_key="temperature"
@@ -262,6 +270,7 @@ class TestWindDirection:
     def test_native_value_from_wind_bearing(self) -> None:
         """The sensor reads the wind bearing and returns its compass point."""
         coordinator = Mock()
+        coordinator.config_entry.data = {"location": "Budapest"}
         coordinator.data = {"wind_bearing": 200}
         desc = next(d for d in ENTITY_DESCRIPTIONS if d.key == "wind_direction")
         assert IdokepSensor(coordinator, desc).native_value == "ssw"
@@ -302,6 +311,7 @@ class TestTodayMinMaxSensors:
     def test_values(self) -> None:
         """The sensors show the parsed values, Unknown when missing."""
         coordinator = Mock()
+        coordinator.config_entry.data = {"location": "Budapest"}
         coordinator.data = {"temperature_max_today": 16, "temperature_min_today": 6}
         max_desc = next(
             d for d in ENTITY_DESCRIPTIONS if d.key == "temperature_max_today"
@@ -389,6 +399,7 @@ class TestWindStrengthSensors:
     def test_values(self) -> None:
         """The sensors show the current hour's strength and estimate."""
         coordinator = Mock()
+        coordinator.config_entry.data = {"location": "Budapest"}
         coordinator.data = {"wind_strength": "moderate_breeze", "wind_speed": 24}
         strength = next(d for d in ENTITY_DESCRIPTIONS if d.key == "wind_strength")
         speed = next(d for d in ENTITY_DESCRIPTIONS if d.key == "wind_speed")
