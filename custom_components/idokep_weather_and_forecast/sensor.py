@@ -63,6 +63,7 @@ HOURLY_KEYS = (
     "wind_direction",
     "wind_strength",
     "wind_speed",
+    "precipitation_probability",
 )
 
 
@@ -128,6 +129,12 @@ ENTITY_DESCRIPTIONS = (
         translation_key="wind_speed",
         native_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
         device_class=SensorDeviceClass.WIND_SPEED,
+    ),
+    # The current hour's chance of precipitation; 0 when the page shows none
+    SensorEntityDescription(
+        key="precipitation_probability",
+        translation_key="precipitation_probability",
+        native_unit_of_measurement=PERCENTAGE,
     ),
 )
 

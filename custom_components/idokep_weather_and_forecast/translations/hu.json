@@ -101,6 +101,9 @@
             "wind_speed": {
                 "name": "Szélsebesség"
             },
+            "precipitation_probability": {
+                "name": "Csapadék valószínűsége"
+            },
             "station_temperature": {
                 "name": "Hőmérséklet"
             },

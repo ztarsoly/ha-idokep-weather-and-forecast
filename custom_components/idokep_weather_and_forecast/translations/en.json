@@ -101,6 +101,9 @@
             "wind_speed": {
                 "name": "Wind speed"
             },
+            "precipitation_probability": {
+                "name": "Precipitation probability"
+            },
             "station_temperature": {
                 "name": "Temperature"
             },

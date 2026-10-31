@@ -34,6 +34,7 @@ FORECAST_DATA = {
     "wind_bearing": 12,
     "wind_strength": "moderate_breeze",
     "wind_speed": 24,
+    "precipitation_probability": 25,
     "alerts": [AlertData(level="yellow", type="wind", description="Szél")],
     "alerts_by_level": {"yellow": [{"type": "wind"}], "orange": [], "red": []},
     "daily_forecast": [
@@ -110,6 +111,7 @@ class TestRestoreForecast:
         assert result["wind_bearing"] == 12
         assert result["wind_strength"] == "moderate_breeze"
         assert result["wind_speed"] == 24
+        assert result["precipitation_probability"] == 25
         assert result["alerts"] == FORECAST_DATA["alerts"]
         assert isinstance(result["alerts"][0], AlertData)
         assert result["alerts_by_level"] == FORECAST_DATA["alerts_by_level"]

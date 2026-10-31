@@ -94,7 +94,13 @@ def _restore_forecast(
         result.update({key: data[key] for key in TODAY_KEYS if key in data})
 
     if now - fetched <= MAX_AGE:
-        for key in ("alerts_by_level", "wind_bearing", "wind_strength", "wind_speed"):
+        for key in (
+            "alerts_by_level",
+            "wind_bearing",
+            "wind_strength",
+            "wind_speed",
+            "precipitation_probability",
+        ):
             if key in data:
                 result[key] = data[key]
         if "alerts" in data:

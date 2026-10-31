@@ -10,7 +10,7 @@ Az integráció az idokep.hu nyilvános oldalait olvassa (nincs hivatalos API, f
 ## Funkciók
 
 - **Időjárás entitás** óránkénti és napi (kb. 23 napos) előrejelzéssel, a Home Assistant új forecast API-jával
-- **Előrejelzési szenzorok**: hőmérséklet, állapot, mai maximum/minimum, szélirány, szélerősség, becsült szélsebesség
+- **Előrejelzési szenzorok**: hőmérséklet, állapot, mai maximum/minimum, szélirány, szélerősség, becsült szélsebesség, csapadék valószínűsége
 - **Riasztások**: vihar a következő órában, általános, sárga, narancs és piros riasztás
 - **Időjárás-állomások** (nem kötelező): egy vagy több idokep.hu automata 12 mért adata egy eszközben összevonva, és a mérés ideje
 - **Országos radar**: animált GIF az utolsó 5 radarképből, külön szolgáltatásként
@@ -25,7 +25,7 @@ Minden felvett bejegyzéshez (településhez) az alábbiak jönnek létre. A `<N
 
 | Entitás | Típus | Megjegyzés |
 |---|---|---|
-| `<Név> Forecast` | időjárás | aktuális állapot, hőmérséklet, szél; óránkénti és napi előrejelzés |
+| `<Név> Forecast` | időjárás | aktuális állapot, hőmérséklet, szél, csapadék valószínűsége (attribútum); óránkénti és napi előrejelzés |
 | Hőmérséklet | szenzor (°C) | aktuális |
 | Állapot | szenzor (felsorolás) | pl. napos, borult, eső |
 | Mai maximum hőmérséklet | szenzor (°C) | a napi előrejelzésből, éjfélig megmarad |
@@ -34,6 +34,7 @@ Minden felvett bejegyzéshez (településhez) az alábbiak jönnek létre. A `<N
 | Szélirány (égtáj) | szenzor (felsorolás) | 16 égtáj (É, ÉÉK, ÉK, …) |
 | Szélerősség | szenzor (felsorolás) | Beaufort-skála 0–12 (Szélcsend … Orkán) |
 | Szélsebesség | szenzor (km/h) | **becslés** a szélerősségből (az idokep.hu nem ad számot) |
+| Csapadék valószínűsége | szenzor (%) | az aktuális óra előrejelzéséből; 0, ha az oldal nem mutat értéket |
 | Vihar várható az elkövetkező órában | bináris szenzor | |
 | Riasztás | bináris szenzor | bármilyen riasztás |
 | Sárga / Narancs / Piros riasztás | bináris szenzor | szintenként |

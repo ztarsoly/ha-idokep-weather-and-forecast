@@ -38,7 +38,7 @@ class TestIdokepSensorEntityDescriptions:
 
     def test_entity_descriptions_count(self) -> None:
         """Test that we have the expected number of entity descriptions."""
-        assert len(ENTITY_DESCRIPTIONS) == 8
+        assert len(ENTITY_DESCRIPTIONS) == 9
 
     def test_entity_descriptions_keys(self) -> None:
         """Test that entity descriptions have the expected keys."""
@@ -51,9 +51,20 @@ class TestIdokepSensorEntityDescriptions:
             "wind_direction",
             "wind_strength",
             "wind_speed",
+            "precipitation_probability",
         }
         actual_keys = {desc.key for desc in ENTITY_DESCRIPTIONS}
         assert actual_keys == expected_keys
+
+    def test_precipitation_probability_description(self) -> None:
+        """Percent, no device class or state class."""
+        desc = next(
+            d for d in ENTITY_DESCRIPTIONS if d.key == "precipitation_probability"
+        )
+        assert desc.translation_key == "precipitation_probability"
+        assert desc.native_unit_of_measurement == "%"
+        assert desc.device_class is None
+        assert desc.state_class is None
 
     def test_temperature_description(self) -> None:
         """Test the temperature entity description."""

@@ -514,11 +514,13 @@ class HourlyForecastParser(WeatherParser):
             self._last_forecast = forecast
             result["hourly_forecast"] = forecast
             current = self._current_hour_item(forecast, now)
-            # The current hour's wind also serves as "current" wind
+            # The current hour's wind and precipitation probability also
+            # serve as "current" values
             for item_key, key in (
                 ("wind_bearing", "wind_bearing"),
                 ("wind_strength", "wind_strength"),
                 ("native_wind_speed", "wind_speed"),
+                ("precipitation_probability", "precipitation_probability"),
             ):
                 if current and current.get(item_key) is not None:
                     result[key] = current[item_key]

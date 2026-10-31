@@ -94,6 +94,14 @@ class IdokepWeatherEntity(IdokepEntity, WeatherEntity):
         return self.coordinator.data.get("wind_speed")
 
     @property
+    def extra_state_attributes(self) -> dict[str, int] | None:
+        """Return the current hour's precipitation probability (%)."""
+        probability = self.coordinator.data.get("precipitation_probability")
+        if probability is None:
+            return None
+        return {"precipitation_probability": probability}
+
+    @property
     def native_wind_speed_unit(self) -> str:
         """Return the unit of the (estimated) wind speed."""
         return UnitOfSpeed.KILOMETERS_PER_HOUR

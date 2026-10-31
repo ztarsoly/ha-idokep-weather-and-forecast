@@ -161,7 +161,11 @@ class TestIdokepWeatherEntity:
     def test_extra_state_attributes_property(self, mock_coordinator: Mock) -> None:
         """Test extra_state_attributes property returns correct attributes."""
         entity = IdokepWeatherEntity(mock_coordinator)
-        # Temperature, units etc. are standard weather attributes set by HA
+        # Temperature, units etc. are standard weather attributes set by HA;
+        # only the current hour's precipitation probability is added
+        assert entity.extra_state_attributes == {"precipitation_probability": 10}
+
+        del mock_coordinator.data["precipitation_probability"]
         assert entity.extra_state_attributes is None
 
     @pytest.mark.asyncio

@@ -58,6 +58,9 @@
       },
       "station_measurement_time": {
         "default": "mdi:clock-outline"
+      },
+      "precipitation_probability": {
+        "default": "mdi:umbrella-outline"
       }
     },
     "binary_sensor": {

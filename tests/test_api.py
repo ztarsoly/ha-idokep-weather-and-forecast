@@ -1028,12 +1028,19 @@ class TestHourlyParserBranches:
                 <div class="ik wind mersekelt" style="--rotateAngle:{angle}deg"></div>
             </a>
         </div>
+        {rain}
     </div>
+    """
+    RAIN_HTML = """
+        <div class="ik hourly-rain-chance">
+            <i class="fas fa-umbrella"></i>
+            <a class="ik interact" data-bs-content="Csapadék valószínűsége: {p}%">{p}%</a>
+        </div>
     """
 
     def test_extract_wind_bearing(self, parser: HourlyForecastParser) -> None:
         """Bearing is read from the arrow's --rotateAngle style."""
-        html = self.WIND_CARD_HTML.format(hour="16:00", angle=6)
+        html = self.WIND_CARD_HTML.format(rain="", hour="16:00", angle=6)
         card = BeautifulSoup(html, "html.parser").find("div")
         assert parser.extract_wind_bearing(card) == 6
 
@@ -1041,7 +1048,7 @@ class TestHourlyParserBranches:
         self, parser: HourlyForecastParser
     ) -> None:
         """Angles outside 0-359 are wrapped."""
-        html = self.WIND_CARD_HTML.format(hour="16:00", angle=370)
+        html = self.WIND_CARD_HTML.format(rain="", hour="16:00", angle=370)
         card = BeautifulSoup(html, "html.parser").find("div")
         assert parser.extract_wind_bearing(card) == 10
 
@@ -1070,8 +1077,10 @@ class TestHourlyParserBranches:
                 return fixed_now.astimezone(tz)
 
         html = self.WIND_CARD_HTML.format(
-            hour="16:00", angle=6
-        ) + self.WIND_CARD_HTML.format(hour="17:00", angle=200)
+            rain="",
+            hour="16:00",
+            angle=6,
+        ) + self.WIND_CARD_HTML.format(rain="", hour="17:00", angle=200)
         with patch(
             "custom_components.idokep_weather_and_forecast.api.dt.datetime",
             FrozenDateTime,
@@ -1087,6 +1096,33 @@ class TestHourlyParserBranches:
             assert item["native_wind_speed"] == 24
         assert bearings == [6, 200]
         assert result["wind_bearing"] == 6
+
+    def test_parse_current_hour_precipitation_probability(
+        self, parser: HourlyForecastParser
+    ) -> None:
+        """The current hour's rain chance is the top-level value; none shown = 0."""
+        local_tz = zoneinfo.ZoneInfo("Europe/Budapest")
+        fixed_now = dt.datetime(2026, 10, 31, 21, 10, tzinfo=local_tz)
+
+        class FrozenDateTime(dt.datetime):
+            @classmethod
+            def now(cls, tz: dt.tzinfo | None = None) -> dt.datetime:
+                return fixed_now.astimezone(tz)
+
+        html = self.WIND_CARD_HTML.format(
+            rain=self.RAIN_HTML.format(p=18), hour="21:00", angle=0
+        ) + self.WIND_CARD_HTML.format(rain="", hour="22:00", angle=0)
+        with patch(
+            "custom_components.idokep_weather_and_forecast.api.dt.datetime",
+            FrozenDateTime,
+        ):
+            result = parser.parse(BeautifulSoup(html, "html.parser"))
+
+        assert result["precipitation_probability"] == 18
+        probabilities = [
+            item["precipitation_probability"] for item in result["hourly_forecast"]
+        ]
+        assert probabilities == [18, 0]
 
     def test_current_hour_falls_back_to_first_slot(self) -> None:
         """If no slot contains now, the first forecast item is used."""
@@ -1111,7 +1147,7 @@ class TestHourlyParserBranches:
                 return now.astimezone(tz)
 
         html = "".join(
-            self.WIND_CARD_HTML.format(hour=hour, angle=90 * index)
+            self.WIND_CARD_HTML.format(rain="", hour=hour, angle=90 * index)
             for index, hour in enumerate(hours)
         )
         with patch(
