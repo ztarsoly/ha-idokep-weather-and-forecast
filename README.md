@@ -103,7 +103,7 @@ A bejegyzés nevét a Home Assistant saját **Átnevezés** funkciójával lehet
 
 | Adatforrás | Mit frissít | Ütemezés | Hiba esetén |
 |---|---|---|---|
-| Aktuális időjárás (`/idojaras/`) | hőmérséklet, állapot | negyedóránként (x:00, x:15, x:30, x:45) | percenként újra |
+| Aktuális időjárás (`/idojaras/`) | hőmérséklet, állapot | 10 percenként (x:00, x:10, x:20, …) | percenként újra |
 | Előrejelzés (`/elorejelzes/`) | óránkénti és napi előrejelzés, mai max/min, szél, riasztások | óránként (x:00) | 10 percenként újra |
 | Időjárás-állomás (`/automata/<kód>`) | állomás szenzorai | 5 percenként (x:00:59, x:05:59, …) | percenként újra |
 | Radar (`/radar/`) | radarkép | 5 percenként (x:00:59, x:05:59, …) | percenként, amíg új kép nem érkezik |

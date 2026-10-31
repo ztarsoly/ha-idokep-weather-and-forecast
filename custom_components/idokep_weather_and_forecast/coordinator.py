@@ -30,12 +30,12 @@ REQUIRED_KEYS = {
 }
 
 
-def next_quarter_hour(now: datetime) -> datetime:
-    """Return the next x:00, x:15, x:30 or x:45 after now."""
+def next_ten_minutes(now: datetime) -> datetime:
+    """Return the next x:00, x:10, x:20, x:30, x:40 or x:50 after now."""
     # Budapest's UTC offset is whole hours, so UTC boundaries match local ones
     now = dt_util.as_utc(now)
-    floored = now.replace(minute=now.minute - now.minute % 15, second=0, microsecond=0)
-    return floored + timedelta(minutes=15)
+    floored = now.replace(minute=now.minute - now.minute % 10, second=0, microsecond=0)
+    return floored + timedelta(minutes=10)
 
 
 def next_full_hour(now: datetime) -> datetime:
@@ -77,7 +77,7 @@ class IdokepDataUpdateCoordinator(DataUpdateCoordinator):
     Class to manage fetching data from the API.
 
     Each idokep.hu page has its own schedule:
-    - current conditions (/idojaras/): every quarter hour, retry every minute
+    - current conditions (/idojaras/): every 10 minutes, retry every minute
     - forecast (/elorejelzes/: hourly and daily forecast, alerts, today's
       max/min): every full hour, retry every 10 minutes
 
@@ -104,7 +104,7 @@ class IdokepDataUpdateCoordinator(DataUpdateCoordinator):
         )
         self.config_entry = config_entry
         self.schedules: dict[str, SourceSchedule] = {
-            CURRENT: SourceSchedule(next_quarter_hour, timedelta(minutes=1)),
+            CURRENT: SourceSchedule(next_ten_minutes, timedelta(minutes=1)),
             HOURLY: SourceSchedule(next_full_hour, timedelta(minutes=10)),
         }
         # Last successful result per source, kept while a source is failing

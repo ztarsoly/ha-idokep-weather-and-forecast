@@ -23,7 +23,7 @@ from custom_components.idokep_weather_and_forecast.coordinator import (
     SourceSchedule,
     floor_to_minute,
     next_full_hour,
-    next_quarter_hour,
+    next_ten_minutes,
 )
 
 if TYPE_CHECKING:
@@ -93,15 +93,15 @@ class TestScheduleTimes:
     @pytest.mark.parametrize(
         ("now", "expected"),
         [
-            (local(2026, 10, 29, 12, 7), local(2026, 10, 29, 12, 15)),
-            (local(2026, 10, 29, 12, 15), local(2026, 10, 29, 12, 30)),
+            (local(2026, 10, 29, 12, 7), local(2026, 10, 29, 12, 10)),
+            (local(2026, 10, 29, 12, 10), local(2026, 10, 29, 12, 20)),
             (local(2026, 10, 29, 12, 59, 59), local(2026, 10, 29, 13, 0)),
             (local(2026, 10, 29, 23, 50), local(2026, 10, 30, 0, 0)),
         ],
     )
-    def test_next_quarter_hour(self, now: datetime, expected: datetime) -> None:
-        """Current conditions run at x:00, x:15, x:30 and x:45."""
-        assert next_quarter_hour(now) == expected
+    def test_next_ten_minutes(self, now: datetime, expected: datetime) -> None:
+        """Current conditions run at x:00, x:10, x:20, x:30, x:40 and x:50."""
+        assert next_ten_minutes(now) == expected
 
     @pytest.mark.parametrize(
         ("now", "expected"),
@@ -164,7 +164,7 @@ class TestCoordinatorUpdates:
         client.async_get_current_weather.assert_awaited_once_with("Budapest")
         client.async_get_hourly_forecast.assert_awaited_once_with("Budapest")
         assert set(coordinator.schedules) == {CURRENT, HOURLY}
-        assert coordinator.schedules[CURRENT].next_due == local(2026, 10, 29, 12, 15)
+        assert coordinator.schedules[CURRENT].next_due == local(2026, 10, 29, 12, 10)
         assert coordinator.schedules[HOURLY].next_due == local(2026, 10, 29, 13, 0)
 
     @pytest.mark.asyncio
@@ -269,11 +269,11 @@ class TestTick:
         await update_at(coordinator, local(2026, 10, 29, 12, 7))
 
         with patch.object(coordinator, "async_refresh", AsyncMock()) as refresh:
-            await coordinator.async_tick(local(2026, 10, 29, 12, 14))
+            await coordinator.async_tick(local(2026, 10, 29, 12, 9))
             refresh.assert_not_awaited()
 
             # The timer fires a few milliseconds late; that must still count
-            await coordinator.async_tick(local(2026, 10, 29, 12, 15, 0, 4000))
+            await coordinator.async_tick(local(2026, 10, 29, 12, 10, 0, 4000))
             refresh.assert_awaited_once()
 
     @pytest.mark.asyncio
