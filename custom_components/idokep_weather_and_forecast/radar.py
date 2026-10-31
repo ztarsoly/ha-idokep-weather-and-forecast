@@ -44,6 +44,8 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 FRAME_URL = "https://www.idokep.hu/radar/radar{index}.jpg"
+# idokep.hu's radar page (the radar device's "Visit" link)
+RADAR_PAGE_URL = "https://www.idokep.hu/radar"
 FRAME_COUNT = 5
 TIMEOUT = 10
 # Animation timing: each frame, then a longer pause on the newest

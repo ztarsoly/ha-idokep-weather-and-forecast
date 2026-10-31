@@ -10,7 +10,7 @@ from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, MANUFACTURER
-from .radar import RadarCoordinator
+from .radar import RADAR_PAGE_URL, RadarCoordinator
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -54,6 +54,7 @@ class IdokepRadarImage(CoordinatorEntity[RadarCoordinator], ImageEntity):
             manufacturer=MANUFACTURER,
             model=RADAR_MODEL,
             entry_type=DeviceEntryType.SERVICE,
+            configuration_url=RADAR_PAGE_URL,
         )
         self._update_from_coordinator()
 

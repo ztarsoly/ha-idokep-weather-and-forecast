@@ -438,6 +438,7 @@ async def test_image_entity(coordinator: RadarCoordinator) -> None:
     assert entity.device_info["name"] == "National Radar Image"
     assert entity.device_info["model"] == "National radar image"
     assert entity.device_info["identifiers"] == {(DOMAIN, "radar_entry")}
+    assert entity.device_info["configuration_url"] == "https://www.idokep.hu/radar"
     assert entity.image_last_updated == coordinator.data.updated
     assert await entity.async_image() == coordinator.data.gif
 
