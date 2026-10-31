@@ -2,12 +2,17 @@
     "config": {
         "step": {
             "user": {
-                "description": "Név: a bejegyzés és eszközei neve (pl. Otthon). Település: a település neve úgy, ahogy az idokep.hu címében szerepel (pl. Budapest). Ha szeretnéd, egy vagy több időjárás-állomást is megadhatsz a kódjukkal; több állomásnál az összevonás módja dönti el, hogyan áll össze az értékük. Segítségért tekintsd meg a dokumentációt a GitHubon.",
                 "data": {
                     "name": "Név",
                     "location": "Település",
                     "station": "Időjárás-állomások kódjai (nem kötelező)",
                     "merge_method": "Összevonás módja"
+                },
+                "data_description": {
+                    "name": "A bejegyzés és eszközei neve (pl. Otthon).",
+                    "location": "A település neve úgy, ahogy az idokep.hu címében szerepel (pl. Budapest).",
+                    "station": "Idokep.hu automaták kódjai, ahogy a címükben szerepelnek (pl. jozsamet), fontossági sorrendben.",
+                    "merge_method": "A Prioritás minden értéket az első olyan állomástól vesz, amelynek van egy óránál frissebb mérése; az Átlag a mérések átlagát veszi."
                 }
             }
         },
@@ -158,12 +163,17 @@
         "step": {
             "init": {
                 "title": "Beállítások",
-                "description": "Név: a bejegyzés neve; az eszközök neve is módosul, ha tartalmazza. Település: a név úgy, ahogy az idokep.hu címében szerepel (pl. Budapest). Időjárás-állomások: idokep.hu automaták kódjai, ahogy a címükben szerepelnek (pl. jozsamet), fontossági sorrendben. Törölve az időjárás-állomás eszköz megszűnik. Összevonás módja: a Prioritás minden értéket az első olyan állomástól vesz, amelynek van egy óránál frissebb mérése; a Legfrissebb mérés a legutóbbi mérést veszi; az Átlag a mérések átlagát.",
                 "data": {
                     "name": "Név",
                     "location": "Település",
                     "station": "Időjárás-állomások kódjai (nem kötelező)",
                     "merge_method": "Összevonás módja"
+                },
+                "data_description": {
+                    "name": "A bejegyzés neve; az eszközök neve is módosul, ha tartalmazza.",
+                    "location": "A település neve úgy, ahogy az idokep.hu címében szerepel (pl. Budapest).",
+                    "station": "Idokep.hu automaták kódjai, ahogy a címükben szerepelnek (pl. jozsamet), fontossági sorrendben. Törölve az időjárás-állomás eszköz megszűnik.",
+                    "merge_method": "A Prioritás minden értéket az első olyan állomástól vesz, amelynek van egy óránál frissebb mérése; az Átlag a mérések átlagát veszi."
                 }
             }
         },
@@ -179,8 +189,7 @@
     "selector": {
         "merge_method": {
             "options": {
-                "priority": "Prioritás (az elsőként megadott állomás előbb)",
-                "newest": "Legfrissebb mérés",
+                "priority": "Prioritás",
                 "average": "Átlag"
             }
         }

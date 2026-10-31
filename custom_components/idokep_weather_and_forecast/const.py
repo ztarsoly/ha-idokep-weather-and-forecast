@@ -14,9 +14,8 @@ STATION = "station"
 # How the stations' readings are merged into one value per sensor
 MERGE_METHOD = "merge_method"
 MERGE_PRIORITY = "priority"  # the first listed station with a fresh reading
-MERGE_NEWEST = "newest"  # the most recent fresh reading
 MERGE_AVERAGE = "average"  # the mean of the fresh readings
-MERGE_METHODS = [MERGE_PRIORITY, MERGE_NEWEST, MERGE_AVERAGE]
+MERGE_METHODS = [MERGE_PRIORITY, MERGE_AVERAGE]
 # A location entry's idokep.hu location name (entry data), e.g. "Budapest"
 LOCATION = "location"
 

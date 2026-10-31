@@ -217,15 +217,6 @@ def test_merge_priority() -> None:
     assert data.measured == NOW - timedelta(minutes=2)  # newest reading used (uv)
 
 
-def test_merge_newest() -> None:
-    """Newest: the most recent reading of each series."""
-    data = merge_readings([A, B], "newest")
-
-    assert data.values == {"hom": 12.0, "rh": 80.0, "szelirany": 10.0, "uv": 3.0}
-    assert data.sources["hom"] == ("b",)
-    assert data.sources["rh"] == ("a",)
-
-
 def test_merge_average() -> None:
     """Average: the mean; wind bearings averaged as angles (350° and 10° → 0°)."""
     data = merge_readings([A, B], "average")
@@ -451,12 +442,14 @@ def test_parse_codes(raw: object, expected: list[str]) -> None:
         ({"location": "X"}, {}, [], "priority"),
         ({"station": "jozsamet"}, {}, ["jozsamet"], "priority"),
         (
-            {"station": ["jozsamet"], "merge_method": "newest"},
+            {"station": ["jozsamet"], "merge_method": "average"},
             {"station": ["olig13", "jozsamet"], "merge_method": "average"},
             ["olig13", "jozsamet"],
             "average",
         ),
         ({"station": ["jozsamet"]}, {"station": [], "merge_method": "x"}, [], "priority"),
+        # Newest was removed: such entries fall back to priority
+        ({"station": "a", "merge_method": "newest"}, {}, ["a"], "priority"),
     ],
 )
 def test_station_codes_and_merge_method(

@@ -43,7 +43,6 @@ Minden felvett bejegyzéshez (településhez) az alábbiak jönnek létre. A `<N
 Egy vagy több idokep.hu időjárás-állomás (automata) mért adatai, egy eszközben. Több állomásnál minden érték a választott **összevonás módja** szerint áll össze:
 
 - **Prioritás**: az első olyan állomás értéke a listában, amelynek van egy óránál frissebb mérése; a következő állomás pótolja, amit az előző nem mér, vagy ha épp nem érhető el.
-- **Legfrissebb mérés**: a legutóbbi mérés, bármelyik állomásé.
 - **Átlag**: a friss mérések átlaga (a szélirány szögként átlagolva).
 
 Minden szenzor `stations` attribútuma mutatja, melyik állomás(ok)tól származik az érték. Azok az értékek, amelyeket egyik állomás sem mér, „nem elérhető” állapotúak; ha egyiknek sincs egy óránál frissebb mérése, „ismeretlen”. Ha egy állomás épp nem érhető el, a többi adatai jelennek meg.
@@ -91,7 +90,7 @@ Az első bejegyzés felvételekor automatikusan létrejön egy **Radar** bejegyz
 | Név | igen | A bejegyzés és az eszközök neve (pl. Otthon → „Otthon Forecast”, „Otthon Weather”) |
 | Település | igen | A település neve úgy, ahogy az idokep.hu címében szerepel, pl. `Budapest` vagy `Debrecen-Józsa` (`https://www.idokep.hu/idojaras/Debrecen-Józsa`) |
 | Időjárás-állomások kódjai | nem | Egy vagy több idokep.hu automata kódja fontossági sorrendben, pl. `jozsamet` (`https://www.idokep.hu/automata/jozsamet`) |
-| Összevonás módja | nem | Prioritás (alapértelmezett), Legfrissebb mérés vagy Átlag – lásd fent |
+| Összevonás módja | nem | Prioritás (alapértelmezett) vagy Átlag – lásd fent |
 
 Az állomáskódot az [idokep.hu/automata](https://www.idokep.hu/automata) oldalon találod: válaszd ki az állomást a listából, a kód a címben a `/automata/` utáni rész (a listában zárójelben is látszik).
 
@@ -103,7 +102,7 @@ A bejegyzés **Beállítás** (Configure) gombjával módosítható:
 
 - **Település**: más településre vált; a bejegyzés és az eszközök neve, valamint az entitások azonosítói megmaradnak.
 - **Időjárás-állomások kódjai**: állomások hozzáadása, törlése vagy sorrendjük módosítása; mind törölve a `<Név> Weather` eszköz megszűnik.
-- **Összevonás módja**: Prioritás, Legfrissebb mérés vagy Átlag.
+- **Összevonás módja**: Prioritás vagy Átlag.
 
 A bejegyzés nevét a Home Assistant saját **Átnevezés** funkciójával lehet módosítani.
 

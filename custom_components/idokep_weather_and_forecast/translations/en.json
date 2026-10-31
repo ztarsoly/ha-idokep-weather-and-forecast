@@ -2,12 +2,17 @@
     "config": {
         "step": {
             "user": {
-                "description": "Name: the name of this entry and its devices (e.g. Home). Settlement: the settlement name as it appears in idokep.hu URLs (e.g. Budapest). Optionally, add one or more weather stations by code; with several, the merge method decides how their readings are combined. For help, see the documentation on GitHub.",
                 "data": {
                     "name": "Name",
                     "location": "Settlement",
                     "station": "Weather station codes (optional)",
                     "merge_method": "Merge method"
+                },
+                "data_description": {
+                    "name": "The name of this entry and its devices (e.g. Home).",
+                    "location": "The settlement name as it appears in idokep.hu URLs (e.g. Budapest).",
+                    "station": "Codes of idokep.hu weather stations, as in their page addresses (e.g. jozsamet), in priority order.",
+                    "merge_method": "Priority takes each value from the first listed station with a reading from the last hour; Average takes the mean of the readings."
                 }
             }
         },
@@ -158,12 +163,17 @@
         "step": {
             "init": {
                 "title": "Configuration",
-                "description": "Name: the name of this entry; device names that contain it are renamed too. Settlement: the name as it appears in idokep.hu URLs (e.g. Budapest). Weather stations: codes of idokep.hu weather stations, as in their page addresses (e.g. jozsamet), in priority order. Clear them to remove the weather station device. Merge method: Priority takes each value from the first listed station with a reading from the last hour; Newest takes the most recent reading; Average takes the mean of the readings.",
                 "data": {
                     "name": "Name",
                     "location": "Settlement",
                     "station": "Weather station codes (optional)",
                     "merge_method": "Merge method"
+                },
+                "data_description": {
+                    "name": "The name of this entry; device names that contain it are renamed too.",
+                    "location": "The settlement name as it appears in idokep.hu URLs (e.g. Budapest).",
+                    "station": "Codes of idokep.hu weather stations, as in their page addresses (e.g. jozsamet), in priority order. Clear them to remove the weather station device.",
+                    "merge_method": "Priority takes each value from the first listed station with a reading from the last hour; Average takes the mean of the readings."
                 }
             }
         },
@@ -179,8 +189,7 @@
     "selector": {
         "merge_method": {
             "options": {
-                "priority": "Priority (first listed station first)",
-                "newest": "Newest reading",
+                "priority": "Priority",
                 "average": "Average"
             }
         }

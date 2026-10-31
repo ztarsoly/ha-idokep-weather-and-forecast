@@ -10,7 +10,7 @@ own decoder in /js/automataChart.min.js).
 The stations are optional: they are set in the config flow (or later in the
 entry's options) by their codes, e.g. "jozsamet". With several stations,
 each sensor's value is merged from their readings: by priority (the first
-listed station with a fresh reading), the newest reading, or the average.
+listed station with a fresh reading) or the average.
 """
 
 from __future__ import annotations
@@ -39,7 +39,6 @@ from .const import (
     MERGE_AVERAGE,
     MERGE_METHOD,
     MERGE_METHODS,
-    MERGE_NEWEST,
     MERGE_PRIORITY,
     STATION,
 )
@@ -285,8 +284,7 @@ def merge_readings(stations: list[StationReadings], method: str) -> StationData:
     Merge the stations' readings into one value per series.
 
     stations are in priority order. priority: the first station with a fresh
-    reading; newest: the most recent reading; average: the mean of all fresh
-    readings.
+    reading; average: the mean of all fresh readings.
     """
     available = frozenset().union(*(station.available for station in stations))
     values: dict[str, float | None] = {}
@@ -301,10 +299,7 @@ def merge_readings(stations: list[StationReadings], method: str) -> StationData:
             chosen = candidates
             values[key] = _average(key, chosen)
         else:
-            if method == MERGE_NEWEST:
-                chosen = [max(candidates, key=lambda reading: reading.time)]
-            else:
-                chosen = candidates[:1]
+            chosen = candidates[:1]
             values[key] = chosen[0].value
         sources[key] = tuple(reading.code for reading in chosen)
         used.extend(chosen)
