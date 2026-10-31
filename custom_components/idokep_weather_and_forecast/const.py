@@ -8,9 +8,15 @@ MANUFACTURER = "Időkép"
 DOMAIN = "idokep_weather_and_forecast"
 ATTRIBUTION = "Weather forecast by Időkép"
 
-# Optional weather station (automata) code of a location entry, e.g.
-# "jozsamet"; set in the config flow (entry data) or the options
+# Optional weather station (automata) codes of a location entry, e.g.
+# ["jozsamet", "olig13"]; set in the config flow (entry data) or the options
 STATION = "station"
+# How the stations' readings are merged into one value per sensor
+MERGE_METHOD = "merge_method"
+MERGE_PRIORITY = "priority"  # the first listed station with a fresh reading
+MERGE_NEWEST = "newest"  # the most recent fresh reading
+MERGE_AVERAGE = "average"  # the mean of the fresh readings
+MERGE_METHODS = [MERGE_PRIORITY, MERGE_NEWEST, MERGE_AVERAGE]
 # A location entry's idokep.hu location name (entry data), e.g. "Budapest"
 LOCATION = "location"
 

@@ -62,5 +62,6 @@ class IdokepStationEntity(CoordinatorEntity[StationCoordinator]):
             manufacturer=MANUFACTURER,
             model="Current weather",
             entry_type=DeviceEntryType.SERVICE,
-            configuration_url=STATION_PAGE_URL.format(code=coordinator.code),
+            # The first (highest priority) station's page
+            configuration_url=STATION_PAGE_URL.format(code=coordinator.codes[0]),
         )

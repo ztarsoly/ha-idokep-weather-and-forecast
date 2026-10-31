@@ -44,7 +44,8 @@ def _flow(
 
 
 def _patch_checks(
-    location_error: str | None = None, station_error: str | None = None
+    location_error: str | None = None,
+    station_error: tuple[str, str] | None = None,
 ) -> tuple[Any, Any]:
     """Patch the idokep.hu checks of the location and station code."""
     return (
@@ -67,10 +68,11 @@ async def test_form_shows_current_name_location_and_station() -> None:
 
     assert result["type"] == FlowResultType.FORM
     schema = {str(key): key for key in result["data_schema"].schema}
-    assert list(schema) == ["name", "location", "station"]
+    assert list(schema) == ["name", "location", "station", "merge_method"]
     assert schema["name"].default() == "Debrecen-Józsa"
     assert schema["location"].default() == "Debrecen-Józsa"
-    assert schema["station"].description == {"suggested_value": "jozsamet"}
+    assert schema["station"].description == {"suggested_value": ["jozsamet"]}
+    assert schema["merge_method"].default() == "priority"
 
 
 @pytest.mark.asyncio
@@ -84,7 +86,7 @@ async def test_same_location_only_saves_station() -> None:
         )
 
     assert result["type"] == FlowResultType.CREATE_ENTRY
-    assert result["data"] == {"station": "ha0kaistvan"}
+    assert result["data"] == {"station": ["ha0kaistvan"], "merge_method": "priority"}
     check_location.assert_not_awaited()
     flow.hass.config_entries.async_update_entry.assert_not_called()
 
@@ -92,7 +94,7 @@ async def test_same_location_only_saves_station() -> None:
 @pytest.mark.asyncio
 async def test_new_location_updates_entry() -> None:
     """A new settlement changes the entry's location and unique ID, not its name."""
-    flow, entry = _flow(options={"station": "jozsamet"})
+    flow, entry = _flow(options={"station": ["jozsamet"], "merge_method": "priority"})
     location_check, station_check = _patch_checks()
     with location_check, station_check:
         result = await flow.async_step_init(
@@ -113,7 +115,7 @@ async def test_new_location_updates_entry() -> None:
 @pytest.mark.asyncio
 async def test_new_location_with_new_station_reloads_once() -> None:
     """Options changed too: Home Assistant's automatic reload is enough."""
-    flow, _ = _flow(options={"station": "jozsamet"})
+    flow, _ = _flow(options={"station": ["jozsamet"], "merge_method": "priority"})
     location_check, station_check = _patch_checks()
     with location_check, station_check:
         await flow.async_step_init({"name": "Debrecen-Józsa", "location": "Debrecen", "station": "ha0kaistvan"})
@@ -153,11 +155,12 @@ async def test_unknown_location_is_refused() -> None:
 async def test_bad_station_does_not_move_location() -> None:
     """With a bad station code nothing is changed yet."""
     flow, _ = _flow()
-    location_check, station_check = _patch_checks(station_error="station")
+    location_check, station_check = _patch_checks(station_error=("station", "x"))
     with location_check, station_check:
         result = await flow.async_step_init({"name": "Debrecen-Józsa", "location": "Debrecen", "station": "x"})
 
     assert result["errors"] == {"station": "station"}
+    assert result["description_placeholders"] == {"code": "x"}
     flow.hass.config_entries.async_update_entry.assert_not_called()
 
 
@@ -175,7 +178,7 @@ def _devices(*names: tuple[str, str | None]) -> list[Mock]:
 @pytest.mark.asyncio
 async def test_new_name_renames_entry_and_devices() -> None:
     """A new name becomes the title; device names containing the old one follow."""
-    flow, entry = _flow(title="Home", options={"station": "jozsamet"})
+    flow, entry = _flow(title="Home", options={"station": ["jozsamet"], "merge_method": "priority"})
     devices = _devices(
         ("Home Forecast", None),  # default name
         ("Home Weather", "Home Weather station"),  # renamed, still has "Home"
@@ -253,7 +256,7 @@ async def test_user_form_fields() -> None:
     result = await _user_flow().async_step_user()
 
     schema = {str(key): key for key in result["data_schema"].schema}
-    assert list(schema) == ["name", "location", "station"]
+    assert list(schema) == ["name", "location", "station", "merge_method"]
     assert isinstance(schema["name"], vol.Required)
     assert isinstance(schema["location"], vol.Required)
     assert isinstance(schema["station"], vol.Optional)
@@ -271,7 +274,11 @@ async def test_user_name_is_the_entry_title() -> None:
 
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert result["title"] == "Home"
-    assert result["data"] == {"location": "Debrecen-Józsa", "station": "jozsamet"}
+    assert result["data"] == {
+        "location": "Debrecen-Józsa",
+        "station": ["jozsamet"],
+        "merge_method": "priority",
+    }
     flow.async_set_unique_id.assert_awaited_once_with(unique_id="debrecen-jozsa")
 
 
@@ -288,3 +295,26 @@ async def test_user_blank_name_is_refused() -> None:
     assert result["errors"] == {"name": "name"}
     schema = {str(key): key for key in result["data_schema"].schema}
     assert schema["location"].default() == "Debrecen-Józsa"
+
+
+@pytest.mark.asyncio
+async def test_user_several_stations_and_merge_method() -> None:
+    """Several station codes are stored as a list with the chosen merge method."""
+    flow = _user_flow()
+    location_check, station_check = _patch_checks()
+    with location_check, station_check:
+        result = await flow.async_step_user(
+            {
+                "name": "Home",
+                "location": "Debrecen-Józsa",
+                "station": ["jozsamet", " ha0kaistvan ", "jozsamet"],
+                "merge_method": "average",
+            }
+        )
+
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["data"] == {
+        "location": "Debrecen-Józsa",
+        "station": ["jozsamet", "ha0kaistvan"],
+        "merge_method": "average",
+    }

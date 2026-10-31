@@ -18,12 +18,21 @@ from .const import (
     ENTRY_TYPE,
     LOCATION,
     LOGGER,
+    MERGE_METHOD,
+    MERGE_METHODS,
+    MERGE_PRIORITY,
     RADAR,
     RADAR_TITLE,
     RADAR_UNIQUE_ID,
     STATION,
 )
-from .station import StationDataError, fetch_station, station_code
+from .station import (
+    StationDataError,
+    fetch_station,
+    merge_method,
+    parse_codes,
+    station_codes,
+)
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -62,14 +71,23 @@ def _location_field(default: str | None) -> dict[vol.Required, Any]:
     }
 
 
-def _station_field(default: str | None) -> dict[vol.Optional, Any]:
-    """Return the optional station code field of a form."""
+def _station_fields(codes: list[str], method: str) -> dict[vol.Optional, Any]:
+    """Return the optional station codes and merge method fields of a form."""
     return {
         vol.Optional(
             STATION,
-            description={"suggested_value": default} if default else None,
+            description={"suggested_value": codes} if codes else None,
         ): selector.TextSelector(
-            selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT),
+            selector.TextSelectorConfig(
+                type=selector.TextSelectorType.TEXT, multiple=True
+            ),
+        ),
+        vol.Optional(MERGE_METHOD, default=method): selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=MERGE_METHODS,
+                translation_key=MERGE_METHOD,
+                mode=selector.SelectSelectorMode.DROPDOWN,
+            ),
         ),
     }
 
@@ -91,17 +109,19 @@ async def _async_location_error(hass: HomeAssistant, location: str) -> str | Non
     return None
 
 
-async def _async_station_error(hass: HomeAssistant, code: str | None) -> str | None:
-    """Return the form error for a station code, or None if usable (or empty)."""
-    if not code:
-        return None
-    try:
-        await fetch_station(async_create_clientsession(hass), code)
-    except StationDataError:
-        return "station"
-    except IdokepApiClientError as exception:
-        LOGGER.error(exception)
-        return "station_connection"
+async def _async_station_error(
+    hass: HomeAssistant, codes: list[str]
+) -> tuple[str, str] | None:
+    """Return (form error, station code) for the first unusable code, or None."""
+    session = async_create_clientsession(hass)
+    for code in codes:
+        try:
+            await fetch_station(session, code)
+        except StationDataError:
+            return "station", code
+        except IdokepApiClientError as exception:
+            LOGGER.error(exception)
+            return "station_connection", code
     return None
 
 
@@ -134,26 +154,29 @@ class IdokepFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> config_entries.ConfigFlowResult:
         """Handle a flow initialized by the user."""
         _errors = {}
+        placeholders = {"code": ""}
+        codes: list[str] = []
+        method = MERGE_PRIORITY
         if user_input is not None:
             user_input = {**user_input}
             # The name is the entry's title (and so the device names), not data
             name = (user_input.pop(CONF_NAME, "") or "").strip()
-            code = (user_input.pop(STATION, "") or "").strip()
+            codes = parse_codes(user_input.pop(STATION, None))
+            method = user_input.pop(MERGE_METHOD, MERGE_PRIORITY)
             if not name:
                 _errors[CONF_NAME] = "name"
             elif error := await _async_location_error(self.hass, user_input[LOCATION]):
                 _errors["base"] = error
-            elif error := await _async_station_error(self.hass, code):
-                _errors[STATION] = error
+            elif problem := await _async_station_error(self.hass, codes):
+                _errors[STATION], placeholders["code"] = problem
             if not _errors:
                 await self.async_set_unique_id(unique_id=slugify(user_input[LOCATION]))
                 self._abort_if_unique_id_configured()
-                if code:
-                    user_input[STATION] = code
+                if codes:
+                    user_input[STATION] = codes
+                user_input[MERGE_METHOD] = method
                 return self.async_create_entry(title=name, data=user_input)
             user_input[CONF_NAME] = name
-            if code:
-                user_input[STATION] = code
 
         return self.async_show_form(
             step_id="user",
@@ -161,10 +184,11 @@ class IdokepFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 {
                     **_name_field((user_input or {}).get(CONF_NAME)),
                     **_location_field((user_input or {}).get(LOCATION)),
-                    **_station_field((user_input or {}).get(STATION)),
+                    **_station_fields(codes, method),
                 },
             ),
             errors=_errors,
+            description_placeholders=placeholders,
         )
 
     async def async_step_import(
@@ -190,23 +214,28 @@ class IdokepOptionsFlow(config_entries.OptionsFlowWithReload):
     async def async_step_init(
         self, user_input: dict | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Ask for the name, the location and the station code."""
+        """Ask for the name, the location, the station codes and the merge method."""
         errors: dict[str, str] = {}
+        placeholders = {"code": ""}
         name = self._entry.title
         location = self._entry.data[LOCATION]
-        code = station_code(self._entry)
+        codes = station_codes(self._entry)
+        method = merge_method(self._entry)
         if user_input is not None:
             name = (user_input.get(CONF_NAME) or "").strip()
             location = user_input[LOCATION].strip()
-            code = (user_input.get(STATION) or "").strip() or None
+            codes = parse_codes(user_input.get(STATION))
+            method = user_input.get(MERGE_METHOD, MERGE_PRIORITY)
             if not name:
                 errors[CONF_NAME] = "name"
             if location != self._entry.data[LOCATION]:
                 errors.update(await self._async_location_errors(location))
-            if not errors and (error := await _async_station_error(self.hass, code)):
-                errors[STATION] = error
+            if not errors and (
+                problem := await _async_station_error(self.hass, codes)
+            ):
+                errors[STATION], placeholders["code"] = problem
             if not errors:
-                options = {STATION: code or ""}
+                options = {STATION: codes, MERGE_METHOD: method}
                 self._async_update_entry(name, location, options)
                 # Reloaded afterwards, which adds or removes the station device
                 return self.async_create_entry(data=options)
@@ -217,10 +246,11 @@ class IdokepOptionsFlow(config_entries.OptionsFlowWithReload):
                 {
                     **_name_field(name),
                     **_location_field(location),
-                    **_station_field(code),
+                    **_station_fields(codes, method),
                 }
             ),
             errors=errors,
+            description_placeholders=placeholders,
         )
 
     async def _async_location_errors(self, location: str) -> dict[str, str]:
@@ -236,7 +266,7 @@ class IdokepOptionsFlow(config_entries.OptionsFlowWithReload):
         return {}
 
     def _async_update_entry(
-        self, name: str, location: str, options: dict[str, str]
+        self, name: str, location: str, options: dict[str, Any]
     ) -> None:
         """Apply a new name and location (the station is saved as an option)."""
         entry = self._entry

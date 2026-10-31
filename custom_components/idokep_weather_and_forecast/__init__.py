@@ -21,7 +21,12 @@ from .const import DOMAIN, ENTRY_TYPE, LOGGER, RADAR, RADAR_UNIQUE_ID
 from .coordinator import IdokepDataUpdateCoordinator
 from .data import IdokepData, RadarData
 from .radar import RadarCoordinator
-from .station import StationCoordinator, station_code, station_identifier
+from .station import (
+    StationCoordinator,
+    merge_method,
+    station_codes,
+    station_identifier,
+)
 from .storage import STORAGE_VERSION, storage_key
 
 if TYPE_CHECKING:
@@ -100,13 +105,14 @@ async def async_setup_entry(
     await coordinator.async_config_entry_first_refresh()
 
     station = None
-    if code := station_code(entry):
+    if codes := station_codes(entry):
         station = StationCoordinator(
             hass=hass,
             logger=LOGGER,
             config_entry=entry,
             session=async_get_clientsession(hass),
-            code=code,
+            codes=codes,
+            method=merge_method(entry),
         )
         entry.runtime_data.station = station
         # Not a first refresh: an unreachable station must not stop the

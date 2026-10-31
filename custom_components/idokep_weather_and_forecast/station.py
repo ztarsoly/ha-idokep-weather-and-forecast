@@ -7,15 +7,19 @@ are drawn as images there. The page's charts load the same data from
 of up to 12 measurements. That file is decoded here (a port of the site's
 own decoder in /js/automataChart.min.js).
 
-The station is optional: it is set in the config flow (or later in the
-entry's options) by its code, e.g. "jozsamet".
+The stations are optional: they are set in the config flow (or later in the
+entry's options) by their codes, e.g. "jozsamet". With several stations,
+each sensor's value is merged from their readings: by priority (the first
+listed station with a fresh reading), the newest reading, or the average.
 """
 
 from __future__ import annotations
 
 import asyncio
 import math
+import re
 import socket
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
@@ -30,7 +34,15 @@ from .api import (
     IdokepApiClientCommunicationError,
     IdokepApiClientError,
 )
-from .const import DOMAIN, STATION
+from .const import (
+    DOMAIN,
+    MERGE_AVERAGE,
+    MERGE_METHOD,
+    MERGE_METHODS,
+    MERGE_NEWEST,
+    MERGE_PRIORITY,
+    STATION,
+)
 
 if TYPE_CHECKING:
     from logging import Logger
@@ -71,10 +83,33 @@ _SEED_FALLBACK = 2654435769
 _MASK32 = 0xFFFFFFFF
 
 
-def station_code(entry: ConfigEntry) -> str | None:
-    """Return the entry's weather station code (options win over data)."""
-    code = entry.options.get(STATION, entry.data.get(STATION))
-    return code or None
+def parse_codes(raw: str | Iterable[str] | None) -> list[str]:
+    """
+    Return the station codes from a list or a text, without duplicates.
+
+    Older entries store one code as text; a text may also list several codes
+    separated by commas or spaces.
+    """
+    if not raw:
+        return []
+    items = [raw] if isinstance(raw, str) else list(raw)
+    codes: list[str] = []
+    for item in items:
+        for code in re.split(r"[,\s]+", str(item)):
+            if code and code not in codes:
+                codes.append(code)
+    return codes
+
+
+def station_codes(entry: ConfigEntry) -> list[str]:
+    """Return the entry's weather station codes (options win over data)."""
+    return parse_codes(entry.options.get(STATION, entry.data.get(STATION)))
+
+
+def merge_method(entry: ConfigEntry) -> str:
+    """Return the entry's merge method (options win over data)."""
+    method = entry.options.get(MERGE_METHOD, entry.data.get(MERGE_METHOD))
+    return method if method in MERGE_METHODS else MERGE_PRIORITY
 
 
 def station_identifier(entry: ConfigEntry) -> tuple[str, str]:
@@ -95,15 +130,39 @@ class StationSeries:
     series: dict[str, list[float]]
 
 
+@dataclass(frozen=True)
+class Reading:
+    """One station's newest value of a series."""
+
+    value: float
+    time: datetime
+    code: str
+
+
+@dataclass
+class StationReadings:
+    """A station's fresh readings."""
+
+    code: str
+    # Series key -> newest reading within MAX_AGE
+    readings: dict[str, Reading]
+    # Series keys the station reports at all
+    available: frozenset[str]
+    # Time of the newest reading in the file
+    last: datetime | None
+
+
 @dataclass
 class StationData:
-    """The latest measurements of a station."""
+    """The merged measurements of the entry's stations."""
 
-    # Series key -> latest value within MAX_AGE (None if older or missing)
+    # Series key -> merged value (None if no station has a fresh reading)
     values: dict[str, float | None] = field(default_factory=dict)
-    # Series keys the station reports at all
+    # Series key -> codes of the stations the value comes from
+    sources: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    # Series keys any of the stations reports at all
     available: frozenset[str] = frozenset()
-    # Time of the newest reading
+    # Time of the newest reading used
     measured: datetime | None = None
 
 
@@ -191,24 +250,71 @@ def decode_station(raw: bytes) -> StationSeries:
     return StationSeries(times=times, series=series)
 
 
-def latest_measurements(decoded: StationSeries, now: datetime) -> StationData:
-    """Return each series' newest value, if not older than MAX_AGE."""
+def latest_readings(
+    decoded: StationSeries, code: str, now: datetime
+) -> StationReadings:
+    """Return each series' newest reading, if not older than MAX_AGE."""
     oldest = (now - MAX_AGE).timestamp()
-    values: dict[str, float | None] = {}
+    readings: dict[str, Reading] = {}
     available = set()
     for key, series in decoded.series.items():
-        values[key] = None
         for time, value in zip(reversed(decoded.times), reversed(series), strict=True):
             if math.isnan(value):
                 continue
             available.add(key)
             if time >= oldest:
-                values[key] = value
+                readings[key] = Reading(
+                    value, datetime.fromtimestamp(time, tz=UTC), code
+                )
             break
-    measured = (
-        datetime.fromtimestamp(decoded.times[-1], tz=UTC) if decoded.times else None
+    last = datetime.fromtimestamp(decoded.times[-1], tz=UTC) if decoded.times else None
+    return StationReadings(code, readings, frozenset(available), last)
+
+
+def _average(key: str, readings: list[Reading]) -> float:
+    """Return the readings' mean; wind bearings are averaged as angles."""
+    if key == "szelirany":
+        sin = sum(math.sin(math.radians(r.value)) for r in readings)
+        cos = sum(math.cos(math.radians(r.value)) for r in readings)
+        return round(math.degrees(math.atan2(sin, cos)), 1) % 360
+    return round(sum(r.value for r in readings) / len(readings), 1)
+
+
+def merge_readings(stations: list[StationReadings], method: str) -> StationData:
+    """
+    Merge the stations' readings into one value per series.
+
+    stations are in priority order. priority: the first station with a fresh
+    reading; newest: the most recent reading; average: the mean of all fresh
+    readings.
+    """
+    available = frozenset().union(*(station.available for station in stations))
+    values: dict[str, float | None] = {}
+    sources: dict[str, tuple[str, ...]] = {}
+    used: list[Reading] = []
+    for key in available:
+        candidates = [s.readings[key] for s in stations if key in s.readings]
+        if not candidates:
+            values[key] = None
+            continue
+        if method == MERGE_AVERAGE:
+            chosen = candidates
+            values[key] = _average(key, chosen)
+        else:
+            if method == MERGE_NEWEST:
+                chosen = [max(candidates, key=lambda reading: reading.time)]
+            else:
+                chosen = candidates[:1]
+            values[key] = chosen[0].value
+        sources[key] = tuple(reading.code for reading in chosen)
+        used.extend(chosen)
+    times = [r.time for r in used] or [s.last for s in stations if s.last]
+    return StationData(
+        values=values,
+        sources=sources,
+        available=available,
+        measured=max(times, default=None),
     )
-    return StationData(values=values, available=frozenset(available), measured=measured)
 
 
 async def fetch_station(session: aiohttp.ClientSession, code: str) -> StationSeries:
@@ -233,7 +339,7 @@ async def fetch_station(session: aiohttp.ClientSession, code: str) -> StationSer
 
 
 class StationCoordinator(DataUpdateCoordinator[StationData]):
-    """Keep a location entry's weather station measurements up to date."""
+    """Keep a location entry's merged weather station measurements up to date."""
 
     def __init__(
         self,
@@ -241,18 +347,20 @@ class StationCoordinator(DataUpdateCoordinator[StationData]):
         logger: Logger,
         config_entry: ConfigEntry,
         session: aiohttp.ClientSession,
-        code: str,
+        codes: list[str],
+        method: str = MERGE_PRIORITY,
     ) -> None:
         """Initialize the coordinator."""
         super().__init__(
             hass,
             logger=logger,
-            name=f"idokep_weather_and_forecast_station_{code}",
+            name=f"idokep_weather_and_forecast_station_{config_entry.entry_id}",
             update_interval=None,
             config_entry=config_entry,
         )
         self._session = session
-        self.code = code
+        self.codes = codes
+        self.method = method
 
     async def async_tick(self, now: datetime) -> None:
         """
@@ -269,9 +377,27 @@ class StationCoordinator(DataUpdateCoordinator[StationData]):
         await self.async_refresh()
 
     async def _async_update_data(self) -> StationData:
-        """Download the station file and pick the newest values."""
-        try:
-            decoded = await fetch_station(self._session, self.code)
-        except IdokepApiClientError as exception:
-            raise UpdateFailed(exception) from exception
-        return latest_measurements(decoded, dt_util.utcnow())
+        """
+        Download every station's file and merge their readings.
+
+        A station that fails is left out this time (the others fill in);
+        the update fails only if none of them could be read.
+        """
+        results = await asyncio.gather(
+            *(fetch_station(self._session, code) for code in self.codes),
+            return_exceptions=True,
+        )
+        now = dt_util.utcnow()
+        stations: list[StationReadings] = []
+        errors: list[IdokepApiClientError] = []
+        for code, result in zip(self.codes, results, strict=True):
+            if isinstance(result, IdokepApiClientError):
+                self.logger.info("Weather station %s not read: %s", code, result)
+                errors.append(result)
+            elif isinstance(result, BaseException):
+                raise result
+            else:
+                stations.append(latest_readings(result, code, now))
+        if not stations:
+            raise UpdateFailed(errors[0])
+        return merge_readings(stations, self.method)

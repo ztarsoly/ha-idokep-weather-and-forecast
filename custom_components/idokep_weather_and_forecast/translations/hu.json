@@ -2,19 +2,20 @@
     "config": {
         "step": {
             "user": {
-                "description": "Név: a bejegyzés és eszközei neve (pl. Otthon). Település: a település neve úgy, ahogy az idokep.hu címében szerepel (pl. Budapest). Ha szeretnéd, egy időjárás-állomást is megadhatsz a kódjával. Segítségért tekintsd meg a dokumentációt a GitHubon.",
+                "description": "Név: a bejegyzés és eszközei neve (pl. Otthon). Település: a település neve úgy, ahogy az idokep.hu címében szerepel (pl. Budapest). Ha szeretnéd, egy vagy több időjárás-állomást is megadhatsz a kódjukkal; több állomásnál az összevonás módja dönti el, hogyan áll össze az értékük. Segítségért tekintsd meg a dokumentációt a GitHubon.",
                 "data": {
                     "name": "Név",
                     "location": "Település",
-                    "station": "Időjárás-állomás kódja (nem kötelező)"
+                    "station": "Időjárás-állomások kódjai (nem kötelező)",
+                    "merge_method": "Összevonás módja"
                 }
             }
         },
         "error": {
             "connection": "Nem sikerült időjárási adatot lekérni ehhez a településhez. Ellenőrizd a nevet és a kapcsolatot.",
             "unknown": "Ismeretlen hiba történt.",
-            "station": "Ehhez a kódhoz nincs automata adat. Ellenőrizd a kódot az idokep.hu/automata oldalon.",
-            "station_connection": "Az idokep.hu nem érhető el. Ellenőrizd a kapcsolatot.",
+            "station": "Ehhez a kódhoz nincs automata adat: {code}. Ellenőrizd a kódot az idokep.hu/automata oldalon.",
+            "station_connection": "Az idokep.hu nem érhető el ehhez a kódhoz: {code}. Ellenőrizd a kapcsolatot.",
             "name": "Adj meg egy nevet."
         },
         "abort": {
@@ -157,21 +158,31 @@
         "step": {
             "init": {
                 "title": "Beállítások",
-                "description": "Név: a bejegyzés neve; az eszközök neve is módosul, ha tartalmazza. Település: a név úgy, ahogy az idokep.hu címében szerepel (pl. Budapest). Időjárás-állomás: egy idokep.hu automata kódja, ahogy a címében szerepel (pl. jozsamet). Törölve az időjárás-állomás eszköz megszűnik.",
+                "description": "Név: a bejegyzés neve; az eszközök neve is módosul, ha tartalmazza. Település: a név úgy, ahogy az idokep.hu címében szerepel (pl. Budapest). Időjárás-állomások: idokep.hu automaták kódjai, ahogy a címükben szerepelnek (pl. jozsamet), fontossági sorrendben. Törölve az időjárás-állomás eszköz megszűnik. Összevonás módja: a Prioritás minden értéket az első olyan állomástól vesz, amelynek van egy óránál frissebb mérése; a Legfrissebb mérés a legutóbbi mérést veszi; az Átlag a mérések átlagát.",
                 "data": {
                     "name": "Név",
                     "location": "Település",
-                    "station": "Időjárás-állomás kódja (nem kötelező)"
+                    "station": "Időjárás-állomások kódjai (nem kötelező)",
+                    "merge_method": "Összevonás módja"
                 }
             }
         },
         "error": {
-            "station": "Ehhez a kódhoz nincs automata adat. Ellenőrizd a kódot az idokep.hu/automata oldalon.",
-            "station_connection": "Az idokep.hu nem érhető el. Ellenőrizd a kapcsolatot.",
+            "station": "Ehhez a kódhoz nincs automata adat: {code}. Ellenőrizd a kódot az idokep.hu/automata oldalon.",
+            "station_connection": "Az idokep.hu nem érhető el ehhez a kódhoz: {code}. Ellenőrizd a kapcsolatot.",
             "connection": "Nem sikerült időjárási adatot lekérni ehhez a településhez. Ellenőrizd a nevet és a kapcsolatot.",
             "unknown": "Ismeretlen hiba történt.",
             "already_configured": "Ez a település már egy másik bejegyzésben be van állítva.",
             "name": "Adj meg egy nevet."
+        }
+    },
+    "selector": {
+        "merge_method": {
+            "options": {
+                "priority": "Prioritás (az elsőként megadott állomás előbb)",
+                "newest": "Legfrissebb mérés",
+                "average": "Átlag"
+            }
         }
     }
 }

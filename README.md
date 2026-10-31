@@ -3,7 +3,7 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
 [![GitHub Release](https://img.shields.io/github/v/release/ztarsoly/ha-idokep-weather-and-forecast)](https://github.com/ztarsoly/ha-idokep-weather-and-forecast/releases)
 
-Egyéni (custom) Home Assistant integráció, amely az [idokep.hu](https://www.idokep.hu) adatait hozza be: aktuális időjárást, óránkénti és napi előrejelzést, időjárási riasztásokat, egy választható időjárás-állomás (automata) mért adatait és az országos radarképet.
+Egyéni (custom) Home Assistant integráció, amely az [idokep.hu](https://www.idokep.hu) adatait hozza be: aktuális időjárást, óránkénti és napi előrejelzést, időjárási riasztásokat, egy vagy több választható időjárás-állomás (automata) mért adatait és az országos radarképet.
 
 Az integráció az idokep.hu nyilvános oldalait olvassa (nincs hivatalos API, felhasználói fiók sem kell). Ha az idokep.hu megváltoztatja az oldalait, az integrációt is frissíteni kell.
 
@@ -12,7 +12,7 @@ Az integráció az idokep.hu nyilvános oldalait olvassa (nincs hivatalos API, f
 - **Időjárás entitás** óránkénti és napi (kb. 23 napos) előrejelzéssel, a Home Assistant új forecast API-jával
 - **Előrejelzési szenzorok**: hőmérséklet, állapot, mai maximum/minimum, szélirány, szélerősség, becsült szélsebesség
 - **Riasztások**: vihar a következő órában, általános, sárga, narancs és piros riasztás
-- **Időjárás-állomás** (nem kötelező): egy idokep.hu automata 12 mért adata és a mérés ideje
+- **Időjárás-állomások** (nem kötelező): egy vagy több idokep.hu automata 12 mért adata egy eszközben összevonva, és a mérés ideje
 - **Országos radar**: animált GIF az utolsó 5 radarképből, külön szolgáltatásként
 - Magyar és angol fordítás, a Home Assistant nyelvének megfelelően
 - Csak a szükséges oldalakat tölti le, és a legutóbbi jó adatokat lemezre menti, így újraindítás után is azonnal van adat
@@ -40,7 +40,13 @@ Minden felvett bejegyzéshez (településhez) az alábbiak jönnek létre. A `<N
 
 ### `<Név> Weather` – Current weather (csak állomáskóddal)
 
-Egy idokep.hu időjárás-állomás (automata) mért adatai. Azok az értékek, amelyeket az adott állomás nem mér, „nem elérhető” állapotúak; az egy óránál régebbi mérés „ismeretlen”.
+Egy vagy több idokep.hu időjárás-állomás (automata) mért adatai, egy eszközben. Több állomásnál minden érték a választott **összevonás módja** szerint áll össze:
+
+- **Prioritás**: az első olyan állomás értéke a listában, amelynek van egy óránál frissebb mérése; a következő állomás pótolja, amit az előző nem mér, vagy ha épp nem érhető el.
+- **Legfrissebb mérés**: a legutóbbi mérés, bármelyik állomásé.
+- **Átlag**: a friss mérések átlaga (a szélirány szögként átlagolva).
+
+Minden szenzor `stations` attribútuma mutatja, melyik állomás(ok)tól származik az érték. Azok az értékek, amelyeket egyik állomás sem mér, „nem elérhető” állapotúak; ha egyiknek sincs egy óránál frissebb mérése, „ismeretlen”. Ha egy állomás épp nem érhető el, a többi adatai jelennek meg.
 
 | Entitás | Mértékegység |
 |---|---|
@@ -84,7 +90,8 @@ Az első bejegyzés felvételekor automatikusan létrejön egy **Radar** bejegyz
 |---|---|---|
 | Név | igen | A bejegyzés és az eszközök neve (pl. Otthon → „Otthon Forecast”, „Otthon Weather”) |
 | Település | igen | A település neve úgy, ahogy az idokep.hu címében szerepel, pl. `Budapest` vagy `Debrecen-Józsa` (`https://www.idokep.hu/idojaras/Debrecen-Józsa`) |
-| Időjárás-állomás kódja | nem | Egy idokep.hu automata kódja, pl. `jozsamet` (`https://www.idokep.hu/automata/jozsamet`) |
+| Időjárás-állomások kódjai | nem | Egy vagy több idokep.hu automata kódja fontossági sorrendben, pl. `jozsamet` (`https://www.idokep.hu/automata/jozsamet`) |
+| Összevonás módja | nem | Prioritás (alapértelmezett), Legfrissebb mérés vagy Átlag – lásd fent |
 
 Az állomáskódot az [idokep.hu/automata](https://www.idokep.hu/automata) oldalon találod: válaszd ki az állomást a listából, a kód a címben a `/automata/` utáni rész (a listában zárójelben is látszik).
 
@@ -95,7 +102,8 @@ Egy település csak egyszer vehető fel. Több települést külön bejegyzésk
 A bejegyzés **Beállítás** (Configure) gombjával módosítható:
 
 - **Település**: más településre vált; a bejegyzés és az eszközök neve, valamint az entitások azonosítói megmaradnak.
-- **Időjárás-állomás kódja**: másik állomásra vált; üresre állítva a `<Név> Weather` eszköz törlődik.
+- **Időjárás-állomások kódjai**: állomások hozzáadása, törlése vagy sorrendjük módosítása; mind törölve a `<Név> Weather` eszköz megszűnik.
+- **Összevonás módja**: Prioritás, Legfrissebb mérés vagy Átlag.
 
 A bejegyzés nevét a Home Assistant saját **Átnevezés** funkciójával lehet módosítani.
 
@@ -105,7 +113,7 @@ A bejegyzés nevét a Home Assistant saját **Átnevezés** funkciójával lehet
 |---|---|---|---|
 | Aktuális időjárás (`/idojaras/`) | hőmérséklet, állapot | 10 percenként (x:00, x:10, x:20, …) | percenként újra |
 | Előrejelzés (`/elorejelzes/`) | óránkénti és napi előrejelzés, mai max/min, szél, riasztások | óránként (x:00) | 10 percenként újra |
-| Időjárás-állomás (`/automata/<kód>`) | állomás szenzorai | 5 percenként (x:00:59, x:05:59, …) | percenként újra |
+| Időjárás-állomások (`/automata/<kód>`) | állomás szenzorai | 5 percenként (x:00:59, x:05:59, …), minden állomás egyszerre | percenként újra, ha egyik sem érhető el |
 | Radar (`/radar/`) | radarkép | 5 percenként (x:00:59, x:05:59, …) | percenként, amíg új kép nem érkezik |
 
 - Indításkor (újraindítás, újratöltés, új bejegyzés) minden adat azonnal frissül.

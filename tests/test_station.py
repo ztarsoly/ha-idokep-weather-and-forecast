@@ -34,8 +34,13 @@ from custom_components.idokep_weather_and_forecast.station import (
     StationDataError,
     StationSeries,
     decode_station,
-    latest_measurements,
-    station_code,
+    Reading,
+    StationReadings,
+    latest_readings,
+    merge_method,
+    merge_readings,
+    parse_codes,
+    station_codes,
 )
 
 FIXTURE = Path(__file__).parent / "fixtures" / "station_jozsamet.bin"
@@ -161,8 +166,8 @@ def test_decode_real_station_file() -> None:
 # ---- latest values -------------------------------------------------------------
 
 
-def test_latest_measurements() -> None:
-    """Each series' newest reading; too old ones become None."""
+def test_latest_readings() -> None:
+    """Each series' newest reading; too old ones are left out."""
     old = int((NOW - timedelta(hours=2)).timestamp())
     recent = int((NOW - timedelta(minutes=5)).timestamp())
     decoded = StationSeries(
@@ -174,14 +179,72 @@ def test_latest_measurements() -> None:
             "uv": [math.nan, math.nan],  # never measured
         },
     )
-    rh_only = StationSeries(times=[recent, recent + 60], series={"rh": [70, math.nan]})
 
-    data = latest_measurements(decoded, NOW)
+    station = latest_readings(decoded, "jozsamet", NOW)
 
-    assert data.values == {"hom": 11.5, "rh": None, "p": None, "uv": None}
-    assert data.available == {"hom", "rh", "p"}
-    assert data.measured == datetime.fromtimestamp(recent, tz=UTC)
-    assert latest_measurements(rh_only, NOW).values == {"rh": 70}
+    assert station.readings == {
+        "hom": Reading(11.5, datetime.fromtimestamp(recent, tz=UTC), "jozsamet")
+    }
+    assert station.available == {"hom", "rh", "p"}
+    assert station.last == datetime.fromtimestamp(recent, tz=UTC)
+
+
+# ---- merging ---------------------------------------------------------------------
+
+
+def _station(code: str, minutes_ago: int, **values: float) -> StationReadings:
+    """Return a station whose readings are minutes_ago old."""
+    time = NOW - timedelta(minutes=minutes_ago)
+    return StationReadings(
+        code,
+        {key: Reading(value, time, code) for key, value in values.items()},
+        frozenset(values),
+        time,
+    )
+
+
+A = _station("a", 10, hom=10.0, rh=80.0, szelirany=350.0)
+B = _station("b", 2, hom=12.0, szelirany=10.0, uv=3.0)
+
+
+def test_merge_priority() -> None:
+    """Priority: the first listed station; the next one fills its gaps."""
+    data = merge_readings([A, B], "priority")
+
+    assert data.values == {"hom": 10.0, "rh": 80.0, "szelirany": 350.0, "uv": 3.0}
+    assert data.sources == {"hom": ("a",), "rh": ("a",), "szelirany": ("a",), "uv": ("b",)}
+    assert data.available == {"hom", "rh", "szelirany", "uv"}
+    assert data.measured == NOW - timedelta(minutes=2)  # newest reading used (uv)
+
+
+def test_merge_newest() -> None:
+    """Newest: the most recent reading of each series."""
+    data = merge_readings([A, B], "newest")
+
+    assert data.values == {"hom": 12.0, "rh": 80.0, "szelirany": 10.0, "uv": 3.0}
+    assert data.sources["hom"] == ("b",)
+    assert data.sources["rh"] == ("a",)
+
+
+def test_merge_average() -> None:
+    """Average: the mean; wind bearings averaged as angles (350° and 10° → 0°)."""
+    data = merge_readings([A, B], "average")
+
+    assert data.values == {"hom": 11.0, "rh": 80.0, "szelirany": 0.0, "uv": 3.0}
+    assert data.sources["hom"] == ("a", "b")
+    assert data.sources["uv"] == ("b",)
+
+
+def test_merge_without_fresh_readings() -> None:
+    """Reported but too old everywhere: unknown (None), still available."""
+    stale = StationReadings("a", {}, frozenset({"hom"}), NOW - timedelta(hours=3))
+
+    data = merge_readings([stale], "priority")
+
+    assert data.values == {"hom": None}
+    assert data.sources == {}
+    assert data.available == {"hom"}
+    assert data.measured == NOW - timedelta(hours=3)
 
 
 # ---- coordinator ----------------------------------------------------------------
@@ -221,20 +284,54 @@ async def test_tick_respects_polling_and_listeners() -> None:
     coordinator.async_refresh.assert_not_awaited()
 
 
+def _fetching(coordinator: StationCoordinator, files: dict[str, object]) -> object:
+    """Patch fetch_station: code -> decoded file, or an exception to raise."""
+    coordinator._session = Mock()
+    coordinator.codes = list(files)
+    coordinator.method = "priority"
+    coordinator.logger = Mock()
+
+    async def fetch(_session: object, code: str) -> object:
+        result = files[code]
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+    return patch(
+        "custom_components.idokep_weather_and_forecast.station.fetch_station", fetch
+    )
+
+
 @pytest.mark.asyncio
 async def test_update_failure_raises_update_failed() -> None:
-    """A failed download makes the sensors unavailable (UpdateFailed)."""
+    """If no station can be read, the sensors become unavailable (UpdateFailed)."""
     coordinator = _coordinator()
-    coordinator._session = Mock()
-    coordinator.code = "jozsamet"
+    down = IdokepApiClientCommunicationError("down")
     with (
-        patch(
-            "custom_components.idokep_weather_and_forecast.station.fetch_station",
-            AsyncMock(side_effect=IdokepApiClientCommunicationError("down")),
-        ),
+        _fetching(coordinator, {"jozsamet": down, "olig13": StationDataError("x")}),
         pytest.raises(UpdateFailed),
     ):
         await coordinator._async_update_data()
+
+
+@pytest.mark.asyncio
+async def test_update_skips_a_failed_station() -> None:
+    """A station that fails is left out; the others still give the values."""
+    coordinator = _coordinator()
+    now = int(NOW.timestamp())
+    good = StationSeries(times=[now - 60], series={"hom": [7.5]})
+    down = IdokepApiClientCommunicationError("down")
+    with (
+        _fetching(coordinator, {"jozsamet": down, "ha0kaistvan": good}),
+        patch(
+            "custom_components.idokep_weather_and_forecast.station.dt_util.utcnow",
+            return_value=NOW,
+        ),
+    ):
+        data = await coordinator._async_update_data()
+
+    assert data.values == {"hom": 7.5}
+    assert data.sources == {"hom": ("ha0kaistvan",)}
 
 
 # ---- sensors ---------------------------------------------------------------------
@@ -260,7 +357,7 @@ def test_station_description_classes() -> None:
 def _station_mock(data: StationData | None) -> Mock:
     coordinator = Mock(spec=StationCoordinator)
     coordinator.config_entry = Mock(entry_id="entry1", title="Debrecen-Józsa")
-    coordinator.code = "jozsamet"
+    coordinator.codes = ["jozsamet", "olig13"]
     coordinator.data = data
     coordinator.last_update_success = True
     return coordinator
@@ -281,6 +378,26 @@ def test_station_sensor_device_and_value() -> None:
     assert device["configuration_url"] == "https://www.idokep.hu/automata/jozsamet"
     assert sensor.available
     assert sensor.native_value == 12.9
+
+
+def test_station_sensor_names_its_stations() -> None:
+    """The "stations" attribute lists where the value comes from."""
+    data = StationData(
+        values={"hom": 11.0, "rh": 80.0},
+        sources={"hom": ("jozsamet", "olig13"), "rh": ("olig13",)},
+        available=frozenset({"hom", "rh"}),
+        measured=NOW,
+    )
+    hom = next(d for d in STATION_DESCRIPTIONS if d.key == "hom")
+    sensor = IdokepStationSensor(_station_mock(data), hom)
+    time_sensor = IdokepStationMeasurementTimeSensor(
+        _station_mock(data), STATION_MEASUREMENT_TIME_DESCRIPTION
+    )
+
+    assert sensor.extra_state_attributes == {"stations": ["jozsamet", "olig13"]}
+    assert time_sensor.extra_state_attributes == {"stations": ["jozsamet", "olig13"]}
+    no_value = StationData(available=frozenset({"hom"}), values={"hom": None})
+    assert IdokepStationSensor(_station_mock(no_value), hom).extra_state_attributes is None
 
 
 def test_station_sensor_unavailable_if_not_measured() -> None:
@@ -314,17 +431,41 @@ async def test_setup_adds_station_sensors_only_with_station() -> None:
 
 
 @pytest.mark.parametrize(
-    ("data", "options", "expected"),
+    ("raw", "expected"),
     [
-        ({"location": "X"}, {}, None),
-        ({"station": "jozsamet"}, {}, "jozsamet"),
-        ({"station": "jozsamet"}, {"station": "olig13"}, "olig13"),
-        ({"station": "jozsamet"}, {"station": ""}, None),
+        (None, []),
+        ("", []),
+        ("jozsamet", ["jozsamet"]),  # one code stored as text (older entries)
+        ("jozsamet, olig13 jozsamet", ["jozsamet", "olig13"]),
+        (["jozsamet", " ", "olig13", "jozsamet"], ["jozsamet", "olig13"]),
     ],
 )
-def test_station_code(data: dict, options: dict, expected: str | None) -> None:
-    """Options override the code given in the config flow; empty = none."""
-    assert station_code(Mock(data=data, options=options)) == expected
+def test_parse_codes(raw: object, expected: list[str]) -> None:
+    """Codes from a list or a text, in order, without blanks and duplicates."""
+    assert parse_codes(raw) == expected
+
+
+@pytest.mark.parametrize(
+    ("data", "options", "codes", "method"),
+    [
+        ({"location": "X"}, {}, [], "priority"),
+        ({"station": "jozsamet"}, {}, ["jozsamet"], "priority"),
+        (
+            {"station": ["jozsamet"], "merge_method": "newest"},
+            {"station": ["olig13", "jozsamet"], "merge_method": "average"},
+            ["olig13", "jozsamet"],
+            "average",
+        ),
+        ({"station": ["jozsamet"]}, {"station": [], "merge_method": "x"}, [], "priority"),
+    ],
+)
+def test_station_codes_and_merge_method(
+    data: dict, options: dict, codes: list[str], method: str
+) -> None:
+    """Options override the config flow's values; unknown methods mean priority."""
+    entry = Mock(data=data, options=options)
+    assert station_codes(entry) == codes
+    assert merge_method(entry) == method
 
 
 @pytest.mark.asyncio
@@ -332,21 +473,44 @@ def test_station_code(data: dict, options: dict, expected: str | None) -> None:
     ("side_effect", "expected"),
     [
         (None, None),
-        (StationDataError("bad"), "station"),
-        (IdokepApiClientCommunicationError("down"), "station_connection"),
+        (StationDataError("bad"), ("station", "jozsamet")),
+        (
+            IdokepApiClientCommunicationError("down"),
+            ("station_connection", "jozsamet"),
+        ),
     ],
 )
-async def test_station_validation(side_effect: Exception | None, expected: str) -> None:
-    """The flows check the code by downloading the station's file."""
+async def test_station_validation(
+    side_effect: Exception | None, expected: tuple[str, str] | None
+) -> None:
+    """The flows check each code by downloading the station's file."""
     with (
         patch.object(config_flow, "async_create_clientsession"),
         patch.object(
             config_flow, "fetch_station", AsyncMock(side_effect=side_effect)
         ) as fetch,
     ):
-        assert await config_flow._async_station_error(Mock(), "jozsamet") == expected
-        assert await config_flow._async_station_error(Mock(), "") is None
+        assert await config_flow._async_station_error(Mock(), ["jozsamet"]) == expected
+        assert await config_flow._async_station_error(Mock(), []) is None
     fetch.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_station_validation_names_the_bad_code() -> None:
+    """With several codes, the error names the first one that fails."""
+
+    async def fetch(_session: object, code: str) -> None:
+        if code == "nope":
+            raise StationDataError(code)
+
+    with (
+        patch.object(config_flow, "async_create_clientsession"),
+        patch.object(config_flow, "fetch_station", fetch),
+    ):
+        problem = await config_flow._async_station_error(
+            Mock(), ["jozsamet", "nope", "olig13"]
+        )
+    assert problem == ("station", "nope")
 
 
 def test_station_measurement_time_sensor() -> None:

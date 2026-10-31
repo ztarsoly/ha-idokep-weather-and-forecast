@@ -278,7 +278,7 @@ class IdokepSensor(IdokepEntity, SensorEntity):
 
 
 class IdokepStationSensor(IdokepStationEntity, SensorEntity):
-    """A measurement of the optional weather station."""
+    """A measurement of the optional weather stations (merged into one value)."""
 
     def __init__(
         self,
@@ -302,21 +302,37 @@ class IdokepStationSensor(IdokepStationEntity, SensorEntity):
         )
 
     def _reported(self, data: StationData) -> bool:
-        """Return True if the station reports this measurement."""
+        """Return True if any of the stations reports this measurement."""
         return self.entity_description.key in data.available
+
+    def _sources(self, data: StationData) -> tuple[str, ...]:
+        """Return the codes of the stations the value comes from."""
+        return data.sources.get(self.entity_description.key, ())
 
     @property
     def native_value(self) -> float | None:
-        """Return the newest value (None if older than an hour)."""
+        """Return the merged value (None if no reading from the last hour)."""
         return self.coordinator.data.values.get(self.entity_description.key)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, list[str]] | None:
+        """Return the stations the value comes from."""
+        if self.coordinator.data is None:
+            return None
+        sources = self._sources(self.coordinator.data)
+        return {"stations": list(sources)} if sources else None
 
 
 class IdokepStationMeasurementTimeSensor(IdokepStationSensor):
-    """When the station's newest reading was taken."""
+    """When the newest of the readings shown was taken."""
 
     def _reported(self, data: StationData) -> bool:
-        """Return True once the station has a reading."""
+        """Return True once a station has a reading."""
         return data.measured is not None
+
+    def _sources(self, data: StationData) -> tuple[str, ...]:
+        """Return every station any shown value comes from."""
+        return tuple(dict.fromkeys(c for codes in data.sources.values() for c in codes))
 
     @property
     def native_value(self) -> datetime | None:
