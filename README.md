@@ -25,7 +25,7 @@ Minden felvett bejegyzéshez (településhez) az alábbiak jönnek létre. A `<N
 
 | Entitás | Típus | Megjegyzés |
 |---|---|---|
-| `<Név> Forecast` | időjárás | aktuális állapot, hőmérséklet, szél, csapadék valószínűsége (attribútum); óránkénti és napi előrejelzés |
+| `<Név> Forecast` | időjárás | aktuális állapot, hőmérséklet, szél; óránkénti és napi előrejelzés |
 | Hőmérséklet | szenzor (°C) | aktuális |
 | Állapot | szenzor (felsorolás) | pl. napos, borult, eső |
 | Mai maximum hőmérséklet | szenzor (°C) | a napi előrejelzésből, éjfélig megmarad |
