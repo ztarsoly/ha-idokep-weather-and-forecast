@@ -1925,3 +1925,38 @@ def test_daily_probability_is_the_highest_shown_hour() -> None:
 
     # No hours shown for 5 Nov yet: unknown
     assert [d["precipitation_probability"] for d in daily] == [71, 44, None]
+
+
+@pytest.mark.asyncio
+async def test_current_hour_precipitation_is_its_share() -> None:
+    """The "precipitation" value (sensor) is the current hour's share."""
+    client = IdokepApiClient(Mock())
+    hourly = [
+        _hour("2026-11-01T14:00:00+01:00", 16, 68),
+        _hour("2026-11-01T15:00:00+01:00", 16, 70),
+        _hour("2026-11-01T16:00:00+01:00", 8, 61),
+    ]
+    daily = [{"datetime": "2026-11-01", "precipitation": 4.0}]
+
+    class FrozenDateTime(dt.datetime):
+        @classmethod
+        def now(cls, tz: dt.tzinfo | None = None) -> dt.datetime:
+            return dt.datetime(2026, 11, 1, 15, 20, tzinfo=tz)
+
+    with (
+        patch.object(client, "_get_soup", AsyncMock()),
+        patch.object(client._hourly_parser, "parse", return_value={"hourly_forecast": hourly}),
+        patch.object(client._alert_parser, "parse", return_value={}),
+        patch.object(client._daily_parser, "parse", return_value={"daily_forecast": daily}),
+        patch.object(client._daily_parser, "parse_today_min_max", return_value={}),
+        patch(
+            "custom_components.idokep_weather_and_forecast.api.dt.datetime",
+            FrozenDateTime,
+        ),
+    ):
+        result = await client.async_get_hourly_forecast("Pécs")
+
+    # 4 mm over bars 16, 16, 8: 1.6, 1.6, 0.8; now is 15:20
+    assert [h["precipitation"] for h in result["hourly_forecast"]] == [1.6, 1.6, 0.8]
+    assert result["precipitation"] == 1.6
+    assert result["daily_forecast"][0]["precipitation_probability"] == 70

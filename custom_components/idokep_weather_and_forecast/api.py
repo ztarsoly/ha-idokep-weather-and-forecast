@@ -1051,6 +1051,11 @@ class IdokepApiClient:
         daily = result.get("daily_forecast", [])
         split_daily_precipitation(hourly, daily)
         set_daily_probabilities(hourly, daily)
+        # The current hour's amount, known only now that the day is split
+        if hourly:
+            now = dt.datetime.now(tz=TimeUtils.get_local_timezone())
+            current = HourlyForecastParser._current_hour_item(hourly, now)
+            result["precipitation"] = current["precipitation"]
         return result
 
     def restore_today_forecast(self, item: dict[str, Any]) -> None:

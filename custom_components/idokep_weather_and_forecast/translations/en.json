@@ -101,6 +101,9 @@
             "wind_speed": {
                 "name": "Wind speed"
             },
+            "precipitation": {
+                "name": "Precipitation"
+            },
             "precipitation_probability": {
                 "name": "Precipitation probability"
             },

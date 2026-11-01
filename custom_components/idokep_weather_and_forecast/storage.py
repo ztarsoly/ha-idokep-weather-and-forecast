@@ -99,6 +99,7 @@ def _restore_forecast(
             "wind_bearing",
             "wind_strength",
             "wind_speed",
+            "precipitation",
             "precipitation_probability",
         ):
             if key in data:

@@ -101,6 +101,9 @@
             "wind_speed": {
                 "name": "Szélsebesség"
             },
+            "precipitation": {
+                "name": "Csapadék"
+            },
             "precipitation_probability": {
                 "name": "Csapadék valószínűsége"
             },
