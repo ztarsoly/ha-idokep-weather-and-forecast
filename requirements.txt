@@ -5,5 +5,3 @@ pylint
 pytest
 pytest-asyncio
 pytest-cov
-# pycares 5 breaks the aiodns version Home Assistant uses
-pycares<5
