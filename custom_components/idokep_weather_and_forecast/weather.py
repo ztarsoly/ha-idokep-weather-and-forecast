@@ -12,7 +12,7 @@ from homeassistant.components.weather import (
     WeatherEntity,
 )
 from homeassistant.components.weather.const import WeatherEntityFeature
-from homeassistant.const import UnitOfSpeed
+from homeassistant.const import UnitOfPrecipitationDepth, UnitOfSpeed
 from homeassistant.core import callback
 from homeassistant.helpers import sun
 
@@ -102,6 +102,24 @@ class IdokepWeatherEntity(IdokepEntity, WeatherEntity):
     def native_temperature_unit(self) -> str:
         """Return the unit of measurement for temperature."""
         return "°C"
+
+    @property
+    def native_precipitation_unit(self) -> str:
+        """Return the unit of the forecast and current-hour precipitation."""
+        return UnitOfPrecipitationDepth.MILLIMETERS
+
+    @property
+    def extra_state_attributes(self) -> dict[str, float] | None:
+        """
+        Return the current hour's precipitation (mm).
+
+        HA's weather entity has no attribute for it; the Precipitation
+        sensor has the same value.
+        """
+        precipitation = self.coordinator.data.get("precipitation")
+        if precipitation is None:
+            return None
+        return {"precipitation": precipitation}
 
     @callback
     def _handle_coordinator_update(self) -> None:
