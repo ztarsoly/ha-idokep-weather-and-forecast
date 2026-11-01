@@ -34,6 +34,10 @@ class AlertData:
 
 
 # Configuration and constants
+# Hourly item key of the rain bar height (px), used only while parsing
+RAIN_BAR = "rain_bar"
+
+
 class IdokepConfig:
     """Configuration for Időkép API."""
 
@@ -587,7 +591,7 @@ class HourlyForecastParser(WeatherParser):
                 temp = int(temp_a.text.strip())
 
         condition = self.extract_condition(card)
-        precipitation, precipitation_probability = self.extract_precipitation_data(card)
+        precipitation_probability = self.extract_precipitation_probability(card)
 
         try:
             # Extract time and combine with the provided date
@@ -606,7 +610,9 @@ class HourlyForecastParser(WeatherParser):
                 "datetime": slot_start.isoformat(),
                 "temperature": temp,
                 "condition": condition,
-                "precipitation": precipitation,
+                # Set from the day's total by split_daily_precipitation
+                "precipitation": 0,
+                RAIN_BAR: self.extract_rain_bar(card),
                 "precipitation_probability": precipitation_probability,
                 "wind_bearing": self.extract_wind_bearing(card),
                 "wind_strength": strength,
@@ -678,12 +684,6 @@ class HourlyForecastParser(WeatherParser):
                     condition = WeatherConditionMapper.map_condition(condition_val)
         return condition
 
-    def extract_precipitation_data(self, card: Tag) -> tuple[int, int]:
-        """Extract precipitation data from hourly card."""
-        precipitation_probability = self.extract_precipitation_probability(card)
-        precipitation = self.extract_precipitation_amount(card)
-        return precipitation, precipitation_probability
-
     def extract_precipitation_probability(self, card: Tag) -> int:
         """Extract precipitation probability."""
         rain_chance_div = card.find("div", class_="ik hourly-rain-chance")
@@ -703,34 +703,25 @@ class HourlyForecastParser(WeatherParser):
         except ValueError:
             return 0
 
-    def extract_precipitation_amount(self, card: Tag) -> int:
+    def extract_rain_bar(self, card: Tag) -> int:
         """
-        Extract precipitation amount from hourly card.
+        Return the height (px) of the hourly card's rain bar; 0 for none.
 
-        The new frontend no longer encodes mm values as class names.
-        We detect the presence of a non-N/A rainlevel div and estimate from
-        the inline height style (each pixel roughly represents ~1 mm).
-        Returns 0 when no rain is indicated.
+        The page gives no hourly amount in mm, only this bar (a relative
+        indicator); split_daily_precipitation turns it into a share of the
+        day's total.
         """
-        # rainlevel-na means no precipitation
-        if card.find("div", class_="ik rainlevel-na"):
+        meter = card.find("div", class_="hourly-rainlevel-meter") or card.find(
+            "div", class_="rainlevel"
+        )
+        if not isinstance(meter, Tag):
             return 0
-
-        # Look for a generic rainlevel div (new format uses style height)
-        rainlevel_div = card.find("div", class_="ik rainlevel")
-        if not (rainlevel_div and isinstance(rainlevel_div, Tag)):
-            return 0
-
-        # Try to parse height from inline style (e.g. style="height: 5px;")
-        style = rainlevel_div.get("style", "")
+        style = meter.get("style", "")
         if isinstance(style, str):
-            height_match = re.search(r"height:\s*(\d+)px", style)
-            if height_match:
-                # Each pixel is roughly proportional to mm; treat as integer mm
-                return int(height_match.group(1))
-
-        # Rainlevel div exists but height unknown - indicate some precipitation
-        return 1
+            match = re.search(r"height:\s*(\d+)px", style)
+            if match:
+                return int(match.group(1))
+        return 0
 
 
 class DailyForecastParser(WeatherParser):
@@ -872,7 +863,6 @@ class DailyForecastParser(WeatherParser):
         min_temp, max_temp = self.extract_temperatures(col)
         condition = self.extract_condition(col)
         precipitation = self.extract_precipitation(col)
-        precipitation_probability = self.extract_precipitation_probability(col)
 
         return {
             "datetime": str(forecast_date),
@@ -880,7 +870,9 @@ class DailyForecastParser(WeatherParser):
             "templow": min_temp,
             "condition": condition,
             "precipitation": precipitation,
-            "precipitation_probability": precipitation_probability,
+            # The page shows none per day; set from the day's hours
+            # (set_daily_probabilities), None while no hour of the day is shown
+            "precipitation_probability": None,
         }
 
     def extract_temperatures(self, col: Tag) -> tuple[int | None, int | None]:
@@ -954,44 +946,73 @@ class DailyForecastParser(WeatherParser):
 
         return None
 
-    def extract_precipitation(self, col: Tag) -> int:
-        """Extract precipitation amount."""
+    def extract_precipitation(self, col: Tag) -> float:
+        """
+        Extract the day's precipitation amount in mm (e.g. "0,5 mm" -> 0.5).
+
+        Below 2 mm the page prints no number, only "." ("Elszórtan",
+        scattered); the amount then comes from the day's rain bar, which is
+        always 2 px per mm + 1 px (2 mm: 5 px, 5 mm: 11 px; ".": 3 px = 1 mm).
+        """
         precip_span = col.find("span", class_="ik mm")
         if precip_span and isinstance(precip_span, Tag):
-            precip_text = precip_span.text.strip()
-            if precip_text:
-                match = re.search(r"(\d+)", precip_text)
-                if match:
-                    return int(match.group(1))
+            match = re.search(r"(\d+(?:[.,]\d+)?)", precip_span.text)
+            if match:
+                return float(match.group(1).replace(",", "."))
+        bar = col.find("div", class_="rainlevel")
+        if isinstance(bar, Tag):
+            style = bar.get("style", "")
+            match = re.search(r"height:\s*(\d+)px", style if isinstance(style, str) else "")
+            if match and int(match.group(1)) > 1:
+                return round((int(match.group(1)) - 1) / 2, 2)
         return 0
 
-    def extract_precipitation_probability(self, col: Tag) -> int:
-        """Extract precipitation probability."""
-        # Look for percentage values
-        for element in col.find_all(["span", "div", "a"], string=re.compile(r"\d+%")):
-            if isinstance(element, Tag):
-                percent_text = element.text.strip()
-                if percent_text.endswith("%"):
-                    try:
-                        return int(percent_text[:-1])
-                    except ValueError:
-                        continue
 
-        # Look for data attributes
-        for element in col.find_all(["a", "div"], attrs={"data-bs-content": True}):
-            if isinstance(element, Tag):
-                content = element.get("data-bs-content")
-                if isinstance(content, str) and (
-                    "csapadék" in content.lower() or "precipitation" in content.lower()
-                ):
-                    percent_match = re.search(r"(\d+)%", content)
-                    if percent_match:
-                        try:
-                            return int(percent_match.group(1))
-                        except ValueError:
-                            continue
+def split_daily_precipitation(
+    hourly: list[dict[str, Any]], daily: list[dict[str, Any]]
+) -> None:
+    """
+    Give each hour a share of its day's precipitation, by rain bar height.
 
-        return 0
+    The page has amounts only per day; per hour it draws a bar. An hour gets
+    day total × its bar / the day's bars (0 without a bar). Items that were
+    not just parsed (no RAIN_BAR, e.g. the kept current hour) are left as
+    they are.
+    """
+    totals = {item["datetime"]: item.get("precipitation") or 0 for item in daily}
+    bars: dict[str, int] = {}
+    for item in hourly:
+        if RAIN_BAR in item:
+            day = item["datetime"][:10]
+            bars[day] = bars.get(day, 0) + item[RAIN_BAR]
+    for item in hourly:
+        if RAIN_BAR not in item:
+            continue
+        bar = item.pop(RAIN_BAR)
+        day = item["datetime"][:10]
+        total = totals.get(day, 0)
+        item["precipitation"] = (
+            round(total * bar / bars[day], 2) if bar and total and bars[day] else 0
+        )
+
+
+def set_daily_probabilities(
+    hourly: list[dict[str, Any]], daily: list[dict[str, Any]]
+) -> None:
+    """
+    Set each day's precipitation probability: the highest of its hours.
+
+    Only the hours in the forecast count (the current one and those to come);
+    a day without such hours gets None (unknown).
+    """
+    highest: dict[str, int] = {}
+    for item in hourly:
+        probability = item.get("precipitation_probability")
+        if probability is not None:
+            day = item["datetime"][:10]
+            highest[day] = max(highest.get(day, 0), probability)
+    for item in daily:
+        item["precipitation_probability"] = highest.get(item["datetime"])
 
 
 class IdokepApiClient:
@@ -1020,12 +1041,17 @@ class IdokepApiClient:
         from this one download.
         """
         soup = await self._get_soup(IdokepConfig.get_hourly_forecast_url(location))
-        return {
+        result = {
             **self._hourly_parser.parse(soup),
             **self._alert_parser.parse(soup),
             **self._daily_parser.parse(soup),
             **self._daily_parser.parse_today_min_max(soup),
         }
+        hourly = result.get("hourly_forecast", [])
+        daily = result.get("daily_forecast", [])
+        split_daily_precipitation(hourly, daily)
+        set_daily_probabilities(hourly, daily)
+        return result
 
     def restore_today_forecast(self, item: dict[str, Any]) -> None:
         """Seed today's daily entry restored from disk (kept until midnight)."""

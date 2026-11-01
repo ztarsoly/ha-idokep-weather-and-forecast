@@ -24,6 +24,8 @@ from custom_components.idokep_weather_and_forecast.api import (
     TimeUtils,
     WeatherConditionMapper,
     WindStrengthMapper,
+    set_daily_probabilities,
+    split_daily_precipitation,
 )
 
 
@@ -386,28 +388,29 @@ class TestIdokepApiClientWeatherScraping:
         assert first_item["temperature"] == 10
         assert first_item["condition"] == "sunny"
         assert first_item["precipitation_probability"] == 10
-        assert first_item["precipitation"] == 3
+        # Hourly amounts are shares of the day's total (see the split tests);
+        # the rain bar height is only used while parsing
+        for item in forecast:
+            assert isinstance(item["precipitation"], (int, float))
+            assert "rain_bar" not in item
 
         # Verify last hour of Day 1 (23:00)
         day1_last = forecast[23]
         assert day1_last["temperature"] == 10 - 23
         assert day1_last["condition"] == "cloudy"
         assert day1_last["precipitation_probability"] == 10 + (23 * 2)
-        assert day1_last["precipitation"] == 5
 
         # Verify first hour of Day 2 (00:00, item 24)
         day2_first = forecast[24]
         assert day2_first["temperature"] == -5
         assert day2_first["condition"] == "snowy"
         assert day2_first["precipitation_probability"] == 50
-        assert day2_first["precipitation"] == 7
 
         # Verify last hour (Day 2, 11:00)
         last_item = forecast[35]
         assert last_item["temperature"] == -5 - 11
         assert last_item["condition"] == "snowy"
         assert last_item["precipitation_probability"] == 50 + (11 * 3)
-        assert last_item["precipitation"] == 9
 
         # Verify day transition: Day 2's 00:00 should be after Day 1's 23:00
         day1_dt = datetime.fromisoformat(day1_last["datetime"])
@@ -543,26 +546,6 @@ class TestIdokepApiClientWeatherScraping:
         second_day = forecast[1]
         assert second_day["condition"] == "rainy"
         assert second_day["precipitation"] == 8
-
-    def test_extract_hourly_precipitation_data(
-        self, api_client: IdokepApiClient
-    ) -> None:
-        """Test hourly precipitation data extraction."""
-        html = """
-        <div class="card">
-            <div class="ik hourly-rain-chance"><a>25%</a></div>
-            <div class="ik rainlevel" style="height: 3px;"></div>
-        </div>
-        """
-        soup = BeautifulSoup(html, "html.parser")
-        card = soup.find("div", class_="card")
-
-        if isinstance(card, Tag):
-            precipitation, precipitation_probability = (
-                api_client._hourly_parser.extract_precipitation_data(card)
-            )
-            assert precipitation == 3
-            assert precipitation_probability == 25
 
     def test_extract_daily_temperature(self, api_client: IdokepApiClient) -> None:
         """Test daily temperature extraction."""
@@ -1279,42 +1262,6 @@ class TestHourlyParserBranches:
 
     # ---- extract_precipitation_amount -------------------------------------
 
-    def test_precipitation_amount_rainlevel_na_returns_zero(
-        self, parser: HourlyForecastParser
-    ) -> None:
-        """rainlevel-na → returns 0."""
-        html = """
-        <div class="ik wide-hourly-forecast-card">
-            <div class="ik rainlevel-na"></div>
-        </div>
-        """
-        soup = BeautifulSoup(html, "html.parser")
-        card = soup.find("div", class_="ik wide-hourly-forecast-card")
-        assert parser.extract_precipitation_amount(card) == 0
-
-    def test_precipitation_amount_no_rainlevel_returns_zero(
-        self, parser: HourlyForecastParser
-    ) -> None:
-        """No rainlevel div at all → returns 0."""
-        html = "<div class='ik wide-hourly-forecast-card'></div>"
-        soup = BeautifulSoup(html, "html.parser")
-        card = soup.find("div")
-        assert parser.extract_precipitation_amount(card) == 0
-
-    def test_precipitation_amount_rainlevel_no_height_returns_one(
-        self, parser: HourlyForecastParser
-    ) -> None:
-        """Rainlevel div without a height style returns 1 (some rain)."""
-        html = """
-        <div class="ik wide-hourly-forecast-card">
-            <div class="ik rainlevel"></div>
-        </div>
-        """
-        soup = BeautifulSoup(html, "html.parser")
-        card = soup.find("div", class_="ik wide-hourly-forecast-card")
-        assert parser.extract_precipitation_amount(card) == 1
-
-
 # ---------------------------------------------------------------------------
 # DailyForecastParser branch tests
 # ---------------------------------------------------------------------------
@@ -1436,48 +1383,6 @@ class TestDailyParserBranches:
 
     # ---- extract_precipitation_probability (data-attribute path) -----------
 
-    def test_extract_precip_probability_data_attribute_csapadek(
-        self, parser: DailyForecastParser
-    ) -> None:
-        """data-bs-content containing 'csapadék' and a percent → extracts value."""
-        html = """
-        <div class="col">
-            <a data-bs-content="Csapadék valószínűsége: 40%">info</a>
-        </div>
-        """
-        soup = BeautifulSoup(html, "html.parser")
-        col = soup.find("div", class_="col")
-        result = parser.extract_precipitation_probability(col)
-        assert result == 40
-
-    def test_extract_precip_probability_data_attribute_precipitation(
-        self, parser: DailyForecastParser
-    ) -> None:
-        """data-bs-content containing 'precipitation' and a percent → extracts value."""
-        html = """
-        <div class="col">
-            <a data-bs-content="Precipitation probability: 65%">info</a>
-        </div>
-        """
-        soup = BeautifulSoup(html, "html.parser")
-        col = soup.find("div", class_="col")
-        result = parser.extract_precipitation_probability(col)
-        assert result == 65
-
-    def test_extract_precip_probability_data_attribute_returns_zero_when_none(
-        self, parser: DailyForecastParser
-    ) -> None:
-        """No matching data-bs-content → returns 0."""
-        html = """
-        <div class="col">
-            <a data-bs-content="Temperature: 25C">info</a>
-        </div>
-        """
-        soup = BeautifulSoup(html, "html.parser")
-        col = soup.find("div", class_="col")
-        result = parser.extract_precipitation_probability(col)
-        assert result == 0
-
     def test_extract_precipitation_no_span_returns_zero(
         self, parser: DailyForecastParser
     ) -> None:
@@ -1486,26 +1391,6 @@ class TestDailyParserBranches:
         soup = BeautifulSoup(html, "html.parser")
         col = soup.find("div")
         assert parser.extract_precipitation(col) == 0
-
-    def test_extract_precip_probability_value_error_in_string_loop(
-        self, parser: DailyForecastParser
-    ) -> None:
-        r"""
-        Text matching \d+% search but non-integer before % triggers ValueError->0.
-
-        "50.5%" matches the \d+% regex via search (matches "0.5%" from index 3).
-        The full text ends with %, so int("50.5") raises ValueError -> continue.
-        """
-        html = """
-        <div class="col">
-            <span>50.5%</span>
-        </div>
-        """
-        soup = BeautifulSoup(html, "html.parser")
-        col = soup.find("div", class_="col")
-        result = parser.extract_precipitation_probability(col)
-        assert result == 0
-
 
 # ---------------------------------------------------------------------------
 # Per-page fetchers used by the coordinator schedules
@@ -1934,3 +1819,109 @@ class TestWindStrength:
         assert HourlyForecastParser().extract_wind_strength(card) is None
         no_wind = BeautifulSoup("<div></div>", "html.parser").find("div")
         assert HourlyForecastParser().extract_wind_strength(no_wind) is None
+
+
+# ---------------------------------------------------------------------------
+# Precipitation: hourly shares, daily decimals, daily probability
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("html", "expected"),
+    [
+        # Current page: a meter with its height
+        (
+            '<div class="ik hourly-rainlevel-container"><div class="ik '
+            'hourly-rainlevel"><div class="ik hourly-rainlevel-meter" '
+            'style="height: 16px;"></div></div></div>',
+            16,
+        ),
+        # Older page: a rainlevel div
+        ('<div class="ik rainlevel" style="height: 5px;"></div>', 5),
+        ('<div class="ik rainlevel-na"></div>', 0),  # no rain
+        ("", 0),  # nothing at all
+        ('<div class="ik hourly-rainlevel-meter"></div>', 0),  # no height
+    ],
+)
+def test_extract_rain_bar(html: str, expected: int) -> None:
+    """The hourly rain bar's height in px; 0 without a bar."""
+    card = BeautifulSoup(
+        f'<div class="ik wide-hourly-forecast-card">{html}</div>', "html.parser"
+    ).find("div")
+    assert HourlyForecastParser().extract_rain_bar(card) == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "bar", "expected"),
+    [
+        ("5 mm", 11, 5.0),
+        ("0,5 mm", None, 0.5),
+        ("1.2 mm", None, 1.2),
+        (".", 3, 1.0),  # "Elszórtan": no number, the 3 px bar means 1 mm
+        (".", None, 0),
+        ("", None, 0),
+    ],
+)
+def test_daily_precipitation(text: str, bar: int | None, expected: float) -> None:
+    """The printed amount (with decimals), else the bar's: (height - 1) / 2."""
+    bar_html = (
+        f'<div class="ik rainlevel blue" style="height: {bar}px;"></div>' if bar else ""
+    )
+    col = BeautifulSoup(
+        f'<div class="ik dailyForecastCol"><a data-bs-content="x">'
+        f'<span class="ik mm">{text}</span>{bar_html}</a></div>',
+        "html.parser",
+    ).find("div")
+    assert DailyForecastParser().extract_precipitation(col) == expected
+
+
+def _hour(stamp: str, bar: int | None, probability: int = 0) -> dict:
+    item = {"datetime": stamp, "precipitation": 0, "precipitation_probability": probability}
+    if bar is not None:
+        item["rain_bar"] = bar
+    return item
+
+
+def test_split_daily_precipitation() -> None:
+    """Pécs: 5 mm over bars 16, 16, 16, 12, 7 (2 decimals); no bar gives 0."""
+    hourly = [
+        _hour("2026-11-01T13:00:00+01:00", 0),
+        *[
+            _hour(f"2026-11-01T{h}:00:00+01:00", bar)
+            for h, bar in (("14", 16), ("15", 16), ("16", 16), ("17", 12), ("18", 7))
+        ],
+        _hour("2026-11-02T01:00:00+01:00", 4),  # a day with 3 mm, one bar
+        _hour("2026-11-03T01:00:00+01:00", 6),  # bar, but no daily amount
+        {"datetime": "2026-11-01T12:00:00+01:00", "precipitation": 0.4},  # kept
+    ]
+    daily = [
+        {"datetime": "2026-11-01", "precipitation": 5.0},
+        {"datetime": "2026-11-02", "precipitation": 3.0},
+        {"datetime": "2026-11-03", "precipitation": 0},
+    ]
+
+    split_daily_precipitation(hourly, daily)
+
+    amounts = [item["precipitation"] for item in hourly]
+    assert amounts == [0, 1.19, 1.19, 1.19, 0.9, 0.52, 3.0, 0, 0.4]
+    assert all("rain_bar" not in item for item in hourly)
+
+
+def test_daily_probability_is_the_highest_shown_hour() -> None:
+    """A day's probability is the highest of its current and coming hours."""
+    daily = [
+        {"datetime": "2026-11-01", "precipitation_probability": None},
+        {"datetime": "2026-11-02", "precipitation_probability": None},
+        {"datetime": "2026-11-05", "precipitation_probability": None},
+    ]
+    hourly = [
+        _hour("2026-11-01T15:00:00+01:00", None, 50),
+        _hour("2026-11-01T16:00:00+01:00", None, 71),
+        _hour("2026-11-01T17:00:00+01:00", None, 0),
+        _hour("2026-11-02T03:00:00+01:00", None, 44),
+    ]
+
+    set_daily_probabilities(hourly, daily)
+
+    # No hours shown for 5 Nov yet: unknown
+    assert [d["precipitation_probability"] for d in daily] == [71, 44, None]
