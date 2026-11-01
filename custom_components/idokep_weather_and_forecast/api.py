@@ -964,9 +964,9 @@ class DailyForecastParser(WeatherParser):
             match = re.search(r"(\d+(?:[.,]\d+)?)", precip_span.text)
             if match:
                 return float(match.group(1).replace(",", "."))
-        bar = col.find("div", class_="rainlevel")
-        if isinstance(bar, Tag):
-            style = bar.get("style", "")
+        rain_bar = col.find("div", class_="rainlevel")
+        if isinstance(rain_bar, Tag):
+            style = rain_bar.get("style", "")
             match = re.search(r"height:\s*(\d+)px", style if isinstance(style, str) else "")
             if match and int(match.group(1)) > 1:
                 return round((int(match.group(1)) - 1) / 2, 2)

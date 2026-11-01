@@ -1,0 +1,26 @@
+[tool.pytest.ini_options]
+addopts = "--strict-markers"
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = [
+    "ignore:Inheritance class HomeAssistantApplication from web.Application is discouraged:DeprecationWarning",
+]
+
+[tool.pylint.main]
+py-version = "3.13"
+
+[tool.pylint.format]
+max-line-length = 100
+
+[tool.pylint."messages control"]
+# Design checks Home Assistant's own pylint config also turns off;
+# abstract-method: entities implement only the features they support
+disable = [
+    "abstract-method",
+    "too-few-public-methods",
+    "too-many-arguments",
+    "too-many-lines",
+    "too-many-locals",
+    "too-many-positional-arguments",
+]

@@ -173,6 +173,7 @@ class _Reader:
         self._pos = 0
 
     def byte(self) -> int:
+        """Return the next byte."""
         if self._pos >= len(self._data):
             msg = "Truncated station file"
             raise StationDataError(msg)
@@ -181,12 +182,15 @@ class _Reader:
         return value
 
     def uint16(self) -> int:
+        """Return the next 2-byte little-endian integer."""
         return self.byte() + 256 * self.byte()
 
     def uint32(self) -> int:
+        """Return the next 4-byte little-endian integer."""
         return self.uint16() + 65536 * self.uint16()
 
     def varint(self) -> int:
+        """Return the next variable-length integer."""
         value, shift = 0, 1
         while True:
             byte = self.byte()
