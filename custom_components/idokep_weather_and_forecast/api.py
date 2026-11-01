@@ -13,7 +13,7 @@ from typing import Any, ClassVar
 
 import aiohttp
 import async_timeout
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup, Comment, Tag
 
 try:
     import zoneinfo
@@ -34,8 +34,6 @@ class AlertData:
 
 
 # Configuration and constants
-# Hourly item key of the rain bar height (px), used only while parsing
-RAIN_BAR = "rain_bar"
 
 
 class IdokepConfig:
@@ -524,6 +522,7 @@ class HourlyForecastParser(WeatherParser):
                 ("wind_bearing", "wind_bearing"),
                 ("wind_strength", "wind_strength"),
                 ("native_wind_speed", "wind_speed"),
+                ("precipitation", "precipitation"),
                 ("precipitation_probability", "precipitation_probability"),
             ):
                 if current and current.get(item_key) is not None:
@@ -610,9 +609,7 @@ class HourlyForecastParser(WeatherParser):
                 "datetime": slot_start.isoformat(),
                 "temperature": temp,
                 "condition": condition,
-                # Set from the day's total by split_daily_precipitation
-                "precipitation": 0,
-                RAIN_BAR: self.extract_rain_bar(card),
+                "precipitation": self.extract_precipitation_amount(card),
                 "precipitation_probability": precipitation_probability,
                 "wind_bearing": self.extract_wind_bearing(card),
                 "wind_strength": strength,
@@ -703,25 +700,33 @@ class HourlyForecastParser(WeatherParser):
         except ValueError:
             return 0
 
-    def extract_rain_bar(self, card: Tag) -> int:
+    def extract_precipitation_amount(self, card: Tag) -> float:
         """
-        Return the height (px) of the hourly card's rain bar; 0 for none.
+        Return the hour's precipitation in mm; 0 when the card shows none.
 
-        The page gives no hourly amount in mm, only this bar (a relative
-        indicator); split_daily_precipitation turns it into a share of the
-        day's total.
+        The amount is in an HTML comment inside the rain bar (e.g.
+        <div class="ik hourly-rainlevel"><!--2 mm--></div>), not shown on
+        the page. The bar's height follows it but stops at 16 px
+        (7 px: 1 mm, 12 px: 2 mm, 16 px: 3 mm or more), so it is only used
+        if the comment is missing.
         """
-        meter = card.find("div", class_="hourly-rainlevel-meter") or card.find(
-            "div", class_="rainlevel"
-        )
-        if not isinstance(meter, Tag):
+        level = card.find("div", class_="hourly-rainlevel")
+        if isinstance(level, Tag):
+            for comment in level.find_all(string=lambda text: isinstance(text, Comment)):
+                match = re.search(r"(\d+(?:[.,]\d+)?)", comment)
+                if match:
+                    return float(match.group(1).replace(",", "."))
+        meter = card.find("div", class_="hourly-rainlevel-meter")
+        style = meter.get("style", "") if isinstance(meter, Tag) else ""
+        match = re.search(r"height:\s*(\d+)px", style if isinstance(style, str) else "")
+        if not match:
             return 0
-        style = meter.get("style", "")
-        if isinstance(style, str):
-            match = re.search(r"height:\s*(\d+)px", style)
-            if match:
-                return int(match.group(1))
-        return 0
+        height = int(match.group(1))
+        if height <= 0:
+            return 0
+        if height <= 9:  # 7 px bar
+            return 1
+        return 2 if height <= 14 else 3  # 12 px / 16 px bars
 
 
 class DailyForecastParser(WeatherParser):
@@ -968,34 +973,6 @@ class DailyForecastParser(WeatherParser):
         return 0
 
 
-def split_daily_precipitation(
-    hourly: list[dict[str, Any]], daily: list[dict[str, Any]]
-) -> None:
-    """
-    Give each hour a share of its day's precipitation, by rain bar height.
-
-    The page has amounts only per day; per hour it draws a bar. An hour gets
-    day total × its bar / the day's bars (0 without a bar). Items that were
-    not just parsed (no RAIN_BAR, e.g. the kept current hour) are left as
-    they are.
-    """
-    totals = {item["datetime"]: item.get("precipitation") or 0 for item in daily}
-    bars: dict[str, int] = {}
-    for item in hourly:
-        if RAIN_BAR in item:
-            day = item["datetime"][:10]
-            bars[day] = bars.get(day, 0) + item[RAIN_BAR]
-    for item in hourly:
-        if RAIN_BAR not in item:
-            continue
-        bar = item.pop(RAIN_BAR)
-        day = item["datetime"][:10]
-        total = totals.get(day, 0)
-        item["precipitation"] = (
-            round(total * bar / bars[day], 2) if bar and total and bars[day] else 0
-        )
-
-
 def set_daily_probabilities(
     hourly: list[dict[str, Any]], daily: list[dict[str, Any]]
 ) -> None:
@@ -1047,15 +1024,9 @@ class IdokepApiClient:
             **self._daily_parser.parse(soup),
             **self._daily_parser.parse_today_min_max(soup),
         }
-        hourly = result.get("hourly_forecast", [])
-        daily = result.get("daily_forecast", [])
-        split_daily_precipitation(hourly, daily)
-        set_daily_probabilities(hourly, daily)
-        # The current hour's amount, known only now that the day is split
-        if hourly:
-            now = dt.datetime.now(tz=TimeUtils.get_local_timezone())
-            current = HourlyForecastParser._current_hour_item(hourly, now)
-            result["precipitation"] = current["precipitation"]
+        set_daily_probabilities(
+            result.get("hourly_forecast", []), result.get("daily_forecast", [])
+        )
         return result
 
     def restore_today_forecast(self, item: dict[str, Any]) -> None:

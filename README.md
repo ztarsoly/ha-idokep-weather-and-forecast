@@ -34,7 +34,7 @@ Minden felvett bejegyzéshez (településhez) az alábbiak jönnek létre. A `<N
 | Szélirány (égtáj) | szenzor (felsorolás) | 16 égtáj (É, ÉÉK, ÉK, …) |
 | Szélerősség | szenzor (felsorolás) | Beaufort-skála 0–12 (Szélcsend … Orkán) |
 | Szélsebesség | szenzor (km/h) | **becslés** a szélerősségből (az idokep.hu nem ad számot) |
-| Csapadék | szenzor (mm) | az aktuális óra része a napi mennyiségből, az óránkénti csapadéksáv magassága szerint (**becslés**; az oldal óránként nem ad mm-t) |
+| Csapadék | szenzor (mm) | az aktuális óra csapadéka az előrejelzésből (egész mm) |
 | Csapadék valószínűsége | szenzor (%) | az aktuális óra előrejelzéséből; 0, ha az oldal nem mutat értéket |
 | Vihar várható az elkövetkező órában | bináris szenzor | |
 | Riasztás | bináris szenzor | bármilyen riasztás |

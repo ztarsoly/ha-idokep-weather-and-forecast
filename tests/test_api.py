@@ -25,7 +25,6 @@ from custom_components.idokep_weather_and_forecast.api import (
     WeatherConditionMapper,
     WindStrengthMapper,
     set_daily_probabilities,
-    split_daily_precipitation,
 )
 
 
@@ -388,11 +387,9 @@ class TestIdokepApiClientWeatherScraping:
         assert first_item["temperature"] == 10
         assert first_item["condition"] == "sunny"
         assert first_item["precipitation_probability"] == 10
-        # Hourly amounts are shares of the day's total (see the split tests);
-        # the rain bar height is only used while parsing
+        # Hourly amounts are numbers (the hidden mm value, see its tests)
         for item in forecast:
             assert isinstance(item["precipitation"], (int, float))
-            assert "rain_bar" not in item
 
         # Verify last hour of Day 1 (23:00)
         day1_last = forecast[23]
@@ -1019,6 +1016,10 @@ class TestHourlyParserBranches:
             <i class="fas fa-umbrella"></i>
             <a class="ik interact" data-bs-content="Csapadék valószínűsége: {p}%">{p}%</a>
         </div>
+        <div class="ik hourly-rainlevel-container"><div class="ik hourly-rainlevel">
+            <!--{p_mm} mm--></div>
+            <div class="ik hourly-rainlevel-meter" style="height: 12px;"></div>
+        </div>
     """
 
     def test_extract_wind_bearing(self, parser: HourlyForecastParser) -> None:
@@ -1093,7 +1094,7 @@ class TestHourlyParserBranches:
                 return fixed_now.astimezone(tz)
 
         html = self.WIND_CARD_HTML.format(
-            rain=self.RAIN_HTML.format(p=18), hour="21:00", angle=0
+            rain=self.RAIN_HTML.format(p=18, p_mm=2), hour="21:00", angle=0
         ) + self.WIND_CARD_HTML.format(rain="", hour="22:00", angle=0)
         with patch(
             "custom_components.idokep_weather_and_forecast.api.dt.datetime",
@@ -1102,6 +1103,9 @@ class TestHourlyParserBranches:
             result = parser.parse(BeautifulSoup(html, "html.parser"))
 
         assert result["precipitation_probability"] == 18
+        # The current hour's hidden amount (the Precipitation sensor)
+        assert result["precipitation"] == 2.0
+        assert [i["precipitation"] for i in result["hourly_forecast"]] == [2.0, 0]
         probabilities = [
             item["precipitation_probability"] for item in result["hourly_forecast"]
         ]
@@ -1826,30 +1830,6 @@ class TestWindStrength:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    ("html", "expected"),
-    [
-        # Current page: a meter with its height
-        (
-            '<div class="ik hourly-rainlevel-container"><div class="ik '
-            'hourly-rainlevel"><div class="ik hourly-rainlevel-meter" '
-            'style="height: 16px;"></div></div></div>',
-            16,
-        ),
-        # Older page: a rainlevel div
-        ('<div class="ik rainlevel" style="height: 5px;"></div>', 5),
-        ('<div class="ik rainlevel-na"></div>', 0),  # no rain
-        ("", 0),  # nothing at all
-        ('<div class="ik hourly-rainlevel-meter"></div>', 0),  # no height
-    ],
-)
-def test_extract_rain_bar(html: str, expected: int) -> None:
-    """The hourly rain bar's height in px; 0 without a bar."""
-    card = BeautifulSoup(
-        f'<div class="ik wide-hourly-forecast-card">{html}</div>', "html.parser"
-    ).find("div")
-    assert HourlyForecastParser().extract_rain_bar(card) == expected
-
 
 @pytest.mark.parametrize(
     ("text", "bar", "expected"),
@@ -1875,36 +1855,9 @@ def test_daily_precipitation(text: str, bar: int | None, expected: float) -> Non
     assert DailyForecastParser().extract_precipitation(col) == expected
 
 
-def _hour(stamp: str, bar: int | None, probability: int = 0) -> dict:
-    item = {"datetime": stamp, "precipitation": 0, "precipitation_probability": probability}
-    if bar is not None:
-        item["rain_bar"] = bar
-    return item
+def _hour(stamp: str, probability: int) -> dict:
+    return {"datetime": stamp, "precipitation": 0, "precipitation_probability": probability}
 
-
-def test_split_daily_precipitation() -> None:
-    """Pécs: 5 mm over bars 16, 16, 16, 12, 7 (2 decimals); no bar gives 0."""
-    hourly = [
-        _hour("2026-11-01T13:00:00+01:00", 0),
-        *[
-            _hour(f"2026-11-01T{h}:00:00+01:00", bar)
-            for h, bar in (("14", 16), ("15", 16), ("16", 16), ("17", 12), ("18", 7))
-        ],
-        _hour("2026-11-02T01:00:00+01:00", 4),  # a day with 3 mm, one bar
-        _hour("2026-11-03T01:00:00+01:00", 6),  # bar, but no daily amount
-        {"datetime": "2026-11-01T12:00:00+01:00", "precipitation": 0.4},  # kept
-    ]
-    daily = [
-        {"datetime": "2026-11-01", "precipitation": 5.0},
-        {"datetime": "2026-11-02", "precipitation": 3.0},
-        {"datetime": "2026-11-03", "precipitation": 0},
-    ]
-
-    split_daily_precipitation(hourly, daily)
-
-    amounts = [item["precipitation"] for item in hourly]
-    assert amounts == [0, 1.19, 1.19, 1.19, 0.9, 0.52, 3.0, 0, 0.4]
-    assert all("rain_bar" not in item for item in hourly)
 
 
 def test_daily_probability_is_the_highest_shown_hour() -> None:
@@ -1915,10 +1868,10 @@ def test_daily_probability_is_the_highest_shown_hour() -> None:
         {"datetime": "2026-11-05", "precipitation_probability": None},
     ]
     hourly = [
-        _hour("2026-11-01T15:00:00+01:00", None, 50),
-        _hour("2026-11-01T16:00:00+01:00", None, 71),
-        _hour("2026-11-01T17:00:00+01:00", None, 0),
-        _hour("2026-11-02T03:00:00+01:00", None, 44),
+        _hour("2026-11-01T15:00:00+01:00", 50),
+        _hour("2026-11-01T16:00:00+01:00", 71),
+        _hour("2026-11-01T17:00:00+01:00", 0),
+        _hour("2026-11-02T03:00:00+01:00", 44),
     ]
 
     set_daily_probabilities(hourly, daily)
@@ -1927,36 +1880,45 @@ def test_daily_probability_is_the_highest_shown_hour() -> None:
     assert [d["precipitation_probability"] for d in daily] == [71, 44, None]
 
 
-@pytest.mark.asyncio
-async def test_current_hour_precipitation_is_its_share() -> None:
-    """The "precipitation" value (sensor) is the current hour's share."""
-    client = IdokepApiClient(Mock())
-    hourly = [
-        _hour("2026-11-01T14:00:00+01:00", 16, 68),
-        _hour("2026-11-01T15:00:00+01:00", 16, 70),
-        _hour("2026-11-01T16:00:00+01:00", 8, 61),
-    ]
-    daily = [{"datetime": "2026-11-01", "precipitation": 4.0}]
+def _rain_card(level: str = "", meter: int | None = None) -> Tag:
+    """Return an hourly card with a rain bar (comment content, meter px)."""
+    meter_html = (
+        f'<div class="ik hourly-rainlevel-meter" style="height: {meter}px;"></div>'
+        if meter is not None
+        else ""
+    )
+    html = (
+        '<div class="ik wide-hourly-forecast-card"><div class="ik '
+        'hourly-rainlevel-container"><div class="ik hourly-rainlevel-container-inner">'
+        f'<div class="ik hourly-rainlevel">{level}</div>{meter_html}</div></div></div>'
+    )
+    return BeautifulSoup(html, "html.parser").find("div")
 
-    class FrozenDateTime(dt.datetime):
-        @classmethod
-        def now(cls, tz: dt.tzinfo | None = None) -> dt.datetime:
-            return dt.datetime(2026, 11, 1, 15, 20, tzinfo=tz)
 
-    with (
-        patch.object(client, "_get_soup", AsyncMock()),
-        patch.object(client._hourly_parser, "parse", return_value={"hourly_forecast": hourly}),
-        patch.object(client._alert_parser, "parse", return_value={}),
-        patch.object(client._daily_parser, "parse", return_value={"daily_forecast": daily}),
-        patch.object(client._daily_parser, "parse_today_min_max", return_value={}),
-        patch(
-            "custom_components.idokep_weather_and_forecast.api.dt.datetime",
-            FrozenDateTime,
-        ),
-    ):
-        result = await client.async_get_hourly_forecast("Pécs")
+@pytest.mark.parametrize(
+    ("level", "meter", "expected"),
+    [
+        ("<!--2 mm-->", 12, 2.0),  # the hidden value, as on the page
+        ("<!-- 7 mm -->", 16, 7.0),  # above 3 mm the bar stays at 16 px
+        ("<!--0,5 mm-->", 7, 0.5),
+        ("", 7, 1),  # no comment: from the bar
+        ("", 12, 2),
+        ("", 16, 3),
+        ("", None, 0),  # no bar, no rain
+        ("<!--nincs-->", None, 0),
+    ],
+)
+def test_extract_precipitation_amount(level: str, meter: int | None, expected: float) -> None:
+    """The hour's mm comes from the hidden comment, else from the bar."""
+    card = _rain_card(level, meter)
+    assert HourlyForecastParser().extract_precipitation_amount(card) == expected
 
-    # 4 mm over bars 16, 16, 8: 1.6, 1.6, 0.8; now is 15:20
-    assert [h["precipitation"] for h in result["hourly_forecast"]] == [1.6, 1.6, 0.8]
-    assert result["precipitation"] == 1.6
-    assert result["daily_forecast"][0]["precipitation_probability"] == 70
+
+def test_card_without_rain_bar_has_no_precipitation() -> None:
+    """A card with no rain bar at all (rainlevel-na) has 0 mm."""
+    card = BeautifulSoup(
+        '<div class="ik wide-hourly-forecast-card"><div class="ik rainlevel-na">'
+        "</div></div>",
+        "html.parser",
+    ).find("div")
+    assert HourlyForecastParser().extract_precipitation_amount(card) == 0
