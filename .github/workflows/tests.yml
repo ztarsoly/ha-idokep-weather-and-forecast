@@ -25,11 +25,12 @@ jobs:
         with:
           python-version: "3.13"
           cache: "pip"
+          cache-dependency-path: requirements_test.txt
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements_test.txt
 
       - name: Run pylint
         run: python -m pylint custom_components/idokep_weather_and_forecast
