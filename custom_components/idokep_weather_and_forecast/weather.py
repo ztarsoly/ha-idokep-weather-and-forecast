@@ -111,17 +111,15 @@ class IdokepWeatherEntity(IdokepEntity, WeatherEntity):
     @property
     def extra_state_attributes(self) -> dict[str, float] | None:
         """
-        Return the current hour's precipitation (mm) and its probability (%).
+        Return the current hour's precipitation (mm).
 
-        HA's weather entity has no attributes for them; the Precipitation
-        and Precipitation probability sensors have the same values.
+        HA's weather entity has no attribute for it; the Precipitation
+        sensor has the same value.
         """
-        attributes = {
-            key: self.coordinator.data[key]
-            for key in ("precipitation", "precipitation_probability")
-            if self.coordinator.data.get(key) is not None
-        }
-        return attributes or None
+        precipitation = self.coordinator.data.get("precipitation")
+        if precipitation is None:
+            return None
+        return {"precipitation": precipitation}
 
     @callback
     def _handle_coordinator_update(self) -> None:

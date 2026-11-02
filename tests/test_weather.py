@@ -163,31 +163,22 @@ class TestIdokepWeatherEntity:
         entity = IdokepWeatherEntity(mock_coordinator)
         assert entity.native_precipitation_unit == "mm"
 
-    @pytest.mark.parametrize(("amount", "probability"), [(0, 0), (2.0, 61)])
+    @pytest.mark.parametrize("amount", [0, 2.0])
     def test_extra_state_attributes_precipitation(
-        self, mock_coordinator: Mock, amount: float, probability: int
+        self, mock_coordinator: Mock, amount: float
     ) -> None:
-        """The current hour's precipitation and probability are the extras."""
-        mock_coordinator.data = {
-            **mock_coordinator.data,
-            "precipitation": amount,
-            "precipitation_probability": probability,
-        }
+        """The current hour's precipitation is the only extra attribute."""
+        mock_coordinator.data = {**mock_coordinator.data, "precipitation": amount}
         entity = IdokepWeatherEntity(mock_coordinator)
         # Temperature, units etc. are standard weather attributes set by HA
-        assert entity.extra_state_attributes == {
-            "precipitation": amount,
-            "precipitation_probability": probability,
-        }
+        assert entity.extra_state_attributes == {"precipitation": amount}
 
     def test_extra_state_attributes_without_precipitation(
         self, mock_coordinator: Mock
     ) -> None:
-        """No attributes until the forecast page has been read."""
+        """No attribute until the forecast page has been read."""
         mock_coordinator.data = {
-            k: v
-            for k, v in mock_coordinator.data.items()
-            if k not in ("precipitation", "precipitation_probability")
+            k: v for k, v in mock_coordinator.data.items() if k != "precipitation"
         }
         entity = IdokepWeatherEntity(mock_coordinator)
         assert entity.extra_state_attributes is None
