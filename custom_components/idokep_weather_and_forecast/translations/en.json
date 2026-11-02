@@ -160,6 +160,9 @@
             "station_absolute_humidity": {
                 "name": "Absolute humidity"
             },
+            "station_vapour_pressure": {
+                "name": "Vapour pressure"
+            },
             "station_vapour_pressure_deficit": {
                 "name": "Vapour pressure deficit"
             },

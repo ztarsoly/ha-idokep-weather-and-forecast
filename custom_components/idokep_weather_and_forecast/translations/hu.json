@@ -160,6 +160,9 @@
             "station_absolute_humidity": {
                 "name": "Abszolút páratartalom"
             },
+            "station_vapour_pressure": {
+                "name": "Páranyomás"
+            },
             "station_vapour_pressure_deficit": {
                 "name": "Páranyomás-hiány"
             },

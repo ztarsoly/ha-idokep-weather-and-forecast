@@ -450,18 +450,19 @@ async def test_setup_adds_station_sensors_only_with_station() -> None:
     add = Mock()
     await async_setup_entry(Mock(), entry, add)
     station_sensors = list(add.call_args_list[1][0][0])
-    # 12 measurements, 6 calculated values and the time of the newest reading
-    assert len(station_sensors) == 12 + 6 + 1
-    assert [s.entity_description.key for s in station_sensors[12:18]] == [
+    # 12 measurements, 7 calculated values and the time of the newest reading
+    assert len(station_sensors) == 12 + 7 + 1
+    assert [s.entity_description.key for s in station_sensors[12:19]] == [
         "dew_point",
         "apparent_temperature",
         "wet_bulb_temperature",
         "absolute_humidity",
+        "vapour_pressure",
         "vapour_pressure_deficit",
         "cloud_base",
     ]
     assert all(
-        isinstance(s, IdokepStationCalculatedSensor) for s in station_sensors[12:18]
+        isinstance(s, IdokepStationCalculatedSensor) for s in station_sensors[12:19]
     )
     assert isinstance(station_sensors[-1], IdokepStationMeasurementTimeSensor)
 
@@ -588,6 +589,7 @@ def _calculated(key: str) -> object:
         ("apparent_temperature", SensorDeviceClass.TEMPERATURE, "°C", 16.35),
         ("wet_bulb_temperature", SensorDeviceClass.TEMPERATURE, "°C", 13.7),
         ("absolute_humidity", SensorDeviceClass.ABSOLUTE_HUMIDITY, "g/m³", 8.62),
+        ("vapour_pressure", SensorDeviceClass.PRESSURE, "hPa", 11.67),
         ("vapour_pressure_deficit", SensorDeviceClass.PRESSURE, "kPa", 1.17),
         ("cloud_base", SensorDeviceClass.DISTANCE, "m", 1342.36),
     ],

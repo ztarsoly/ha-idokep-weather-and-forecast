@@ -55,11 +55,10 @@ def apparent_temperature(
     """
     if not _valid(temperature, humidity) or wind_speed is None:
         return None
-    vapour_pressure = (
-        humidity / 100 * 6.105 * math.exp(17.27 * temperature / (237.7 + temperature))
-    )
+    # The BoM's own vapour pressure formula (hPa)
+    actual = humidity / 100 * 6.105 * math.exp(17.27 * temperature / (237.7 + temperature))
     wind = wind_speed / KMH_PER_MS
-    return round(temperature + 0.33 * vapour_pressure - 0.70 * wind - 4.00, DECIMALS)
+    return round(temperature + 0.33 * actual - 0.70 * wind - 4.00, DECIMALS)
 
 
 def wet_bulb_temperature(
@@ -90,10 +89,15 @@ def absolute_humidity(
     """Return the absolute humidity (g/m³): water vapour per cubic metre of air."""
     if not _valid(temperature, humidity):
         return None
-    vapour_pressure = _saturation_vapour_pressure(temperature) * humidity / 100
-    return round(
-        ABSOLUTE_HUMIDITY_FACTOR * vapour_pressure / (temperature + KELVIN), DECIMALS
-    )
+    actual = _saturation_vapour_pressure(temperature) * humidity / 100
+    return round(ABSOLUTE_HUMIDITY_FACTOR * actual / (temperature + KELVIN), DECIMALS)
+
+
+def vapour_pressure(temperature: float | None, humidity: float | None) -> float | None:
+    """Return the vapour pressure (hPa): the water vapour's share of the air pressure."""
+    if not _valid(temperature, humidity):
+        return None
+    return round(_saturation_vapour_pressure(temperature) * humidity / 100, DECIMALS)
 
 
 def vapour_pressure_deficit(

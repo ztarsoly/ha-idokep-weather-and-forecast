@@ -68,6 +68,9 @@
       "station_absolute_humidity": {
         "default": "mdi:water"
       },
+      "station_vapour_pressure": {
+        "default": "mdi:water-opacity"
+      },
       "station_vapour_pressure_deficit": {
         "default": "mdi:leaf"
       },

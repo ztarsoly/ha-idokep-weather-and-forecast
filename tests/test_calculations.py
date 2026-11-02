@@ -9,6 +9,7 @@ from custom_components.idokep_weather_and_forecast.calculations import (
     apparent_temperature,
     cloud_base,
     dew_point,
+    vapour_pressure,
     vapour_pressure_deficit,
     wet_bulb_temperature,
 )
@@ -23,6 +24,7 @@ INVALID = [(20.0, None), (None, 50.0), (20.0, 0.0), (20.0, 101.0)]
         dew_point,
         wet_bulb_temperature,
         absolute_humidity,
+        vapour_pressure,
         vapour_pressure_deficit,
         cloud_base,
     ],
@@ -99,6 +101,23 @@ def test_wet_bulb_temperature(
 def test_absolute_humidity(temperature: float, humidity: float, expected: float) -> None:
     """Grams of water vapour per cubic metre."""
     assert absolute_humidity(temperature, humidity) == expected
+
+
+@pytest.mark.parametrize(
+    ("temperature", "humidity", "expected"),
+    [(20.0, 50.0, 11.67), (10.0, 100.0, 12.26), (-5.0, 80.0, 3.38), (30.0, 70.0, 29.66)],
+)
+def test_vapour_pressure(temperature: float, humidity: float, expected: float) -> None:
+    """The water vapour's share of the air pressure, in hPa."""
+    assert vapour_pressure(temperature, humidity) == expected
+
+
+def test_vapour_pressure_and_deficit_add_up_to_saturation() -> None:
+    """Vapour pressure + deficit = saturation vapour pressure (hPa vs kPa)."""
+    saturation = vapour_pressure(20.0, 100.0)
+    total = vapour_pressure(20.0, 50.0) + vapour_pressure_deficit(20.0, 50.0) * 10
+    # The deficit is rounded to 0.01 kPa (0.1 hPa)
+    assert total == pytest.approx(saturation, abs=0.06)
 
 
 @pytest.mark.parametrize(

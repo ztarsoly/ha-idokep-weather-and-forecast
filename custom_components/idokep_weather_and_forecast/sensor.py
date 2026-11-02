@@ -308,6 +308,15 @@ STATION_CALCULATED_DESCRIPTIONS = (
         value_fn=calculations.absolute_humidity,
     ),
     IdokepCalculatedSensorEntityDescription(
+        key="vapour_pressure",
+        translation_key="station_vapour_pressure",
+        native_unit_of_measurement=UnitOfPressure.HPA,
+        suggested_display_precision=DISPLAY_PRECISION,
+        device_class=SensorDeviceClass.PRESSURE,
+        inputs=("hom", "rh"),
+        value_fn=calculations.vapour_pressure,
+    ),
+    IdokepCalculatedSensorEntityDescription(
         key="vapour_pressure_deficit",
         translation_key="station_vapour_pressure_deficit",
         native_unit_of_measurement=UnitOfPressure.KPA,
