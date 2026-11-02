@@ -1922,3 +1922,65 @@ def test_card_without_rain_bar_has_no_precipitation() -> None:
         "html.parser",
     ).find("div")
     assert HourlyForecastParser().extract_precipitation_amount(card) == 0
+
+
+# ---- remaining parser and client paths ------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_html_timeout_raises_communication_error() -> None:
+    """A timeout is a communication error too (the page is retried)."""
+    session = Mock(spec=aiohttp.ClientSession)
+    session.get = Mock(side_effect=TimeoutError())
+    with pytest.raises(IdokepApiClientCommunicationError, match="Timeout"):
+        await HttpClient(session).get_html("https://www.idokep.hu/idojaras/Test")
+
+
+def test_current_hour_skips_unusable_kept_items() -> None:
+    """Kept items without a valid, zoned time are ignored."""
+    tz = zoneinfo.ZoneInfo("Europe/Budapest")
+    parser = HourlyForecastParser()
+    current = {"datetime": "2026-11-03T08:00:00+01:00", "temperature": 7}
+    parser.restore_hourly_forecast(
+        [
+            {"temperature": 1},  # no time
+            {"datetime": "not a time"},
+            {"datetime": "2026-11-03T08:00:00"},  # no time zone
+            current,
+        ]
+    )
+    forecast = [{"datetime": "2026-11-03T09:00:00+01:00", "temperature": 8}]
+    now = dt.datetime(2026, 11, 3, 8, 30, tzinfo=tz)
+
+    assert parser._with_current_hour(forecast, now) == [current, *forecast]
+
+
+def test_hourly_card_without_temperature_is_skipped() -> None:
+    """A card with an hour but no temperature gives no forecast item."""
+    card = BeautifulSoup(
+        '<div class="ik wide-hourly-forecast-card">'
+        '<div class="ik wide-hourly-forecast-hour">9:00</div></div>',
+        "html.parser",
+    ).find("div")
+    hour = card.find("div", class_="ik wide-hourly-forecast-hour")
+    assert HourlyForecastParser()._parse_hourly_card(card, hour, dt.date.today()) is None
+
+
+def test_empty_rain_bar_is_no_precipitation() -> None:
+    """A 0 px rain bar means no precipitation."""
+    assert HourlyForecastParser().extract_precipitation_amount(_rain_card("", 0)) == 0
+
+
+def test_client_passes_restored_data_to_the_parsers() -> None:
+    """Restored today and hourly items reach the daily and hourly parsers."""
+    client = IdokepApiClient(Mock())
+    today = {"datetime": "2026-11-03", "temperature": 10}
+    hours = [{"datetime": "2026-11-03T08:00:00+01:00"}]
+    with (
+        patch.object(client._daily_parser, "restore_today_forecast") as daily,
+        patch.object(client._hourly_parser, "restore_hourly_forecast") as hourly,
+    ):
+        client.restore_today_forecast(today)
+        client.restore_hourly_forecast(hours)
+    daily.assert_called_once_with(today)
+    hourly.assert_called_once_with(hours)

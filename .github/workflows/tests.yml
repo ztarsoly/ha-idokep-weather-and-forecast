@@ -42,4 +42,4 @@ jobs:
           python -m pytest tests/
           --cov=custom_components.idokep_weather_and_forecast
           --cov-report=term-missing
-          --cov-fail-under=80
+          --cov-fail-under=99

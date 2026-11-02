@@ -6,8 +6,10 @@ import math
 from datetime import UTC, datetime, timedelta
 from itertools import pairwise
 from pathlib import Path
-from unittest.mock import AsyncMock, Mock, patch
+from logging import getLogger
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
+import aiohttp
 import pytest
 from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.helpers.device_registry import DeviceEntryType
@@ -37,6 +39,7 @@ from custom_components.idokep_weather_and_forecast.station import (
     StationDataError,
     StationSeries,
     decode_station,
+    fetch_station,
     Reading,
     StationReadings,
     latest_readings,
@@ -637,3 +640,67 @@ def test_station_calculated_sensor_needs_every_input() -> None:
     )
     assert sensor.available
     assert sensor.native_value is None
+
+
+# ---- download and coordinator setup ---------------------------------------------
+
+
+def _session(raw: bytes | None = None, error: Exception | None = None) -> Mock:
+    """Return a session whose get() answers with raw bytes or raises error."""
+    response = MagicMock()
+    response.raise_for_status = Mock()
+    response.read = AsyncMock(return_value=raw)
+    response.__aenter__ = AsyncMock(return_value=response)
+    response.__aexit__ = AsyncMock(return_value=None)
+    session = Mock()
+    session.get = Mock(return_value=response, side_effect=error)
+    return session
+
+
+@pytest.mark.asyncio
+async def test_fetch_station_downloads_and_decodes() -> None:
+    """The station's file is downloaded (code URL-quoted) and decoded."""
+    raw = encode_station([1_800_000_000, 1_800_000_060], {"hom": [12.5, 12.6]})
+    session = _session(raw)
+
+    series = await fetch_station(session, "a b")
+
+    assert series.series["hom"] == [12.5, 12.6]
+    assert session.get.call_args[0][0] == "https://www.idokep.hu/automata/a%20b.bin"
+
+
+@pytest.mark.asyncio
+async def test_fetch_station_network_error() -> None:
+    """A network error becomes a communication error (the station is skipped)."""
+    session = _session(error=aiohttp.ClientError("down"))
+    with pytest.raises(IdokepApiClientCommunicationError):
+        await fetch_station(session, "jozsamet")
+
+
+def test_coordinator_setup(mock_hass: Mock) -> None:
+    """The coordinator keeps its codes and merge method; no polling interval."""
+    entry = Mock(entry_id="entry1")
+    coordinator = StationCoordinator(
+        mock_hass, getLogger(__name__), entry, Mock(), ["jozsamet", "olig13"], "average"
+    )
+    assert coordinator.codes == ["jozsamet", "olig13"]
+    assert coordinator.method == "average"
+    assert coordinator.update_interval is None
+    assert coordinator.name == "idokep_weather_and_forecast_station_entry1"
+
+
+@pytest.mark.asyncio
+async def test_update_reraises_unexpected_errors() -> None:
+    """A bug (not a network or data error) is not hidden as a skipped station."""
+    coordinator = _coordinator()
+    with (
+        _fetching(coordinator, {"jozsamet": RuntimeError("bug")}),
+        pytest.raises(RuntimeError),
+    ):
+        await coordinator._async_update_data()
+
+
+def test_station_sensor_without_data_has_no_attributes() -> None:
+    """Before the first successful fetch there is no stations attribute."""
+    hom = next(d for d in STATION_DESCRIPTIONS if d.key == "hom")
+    assert IdokepStationSensor(_station_mock(None), hom).extra_state_attributes is None

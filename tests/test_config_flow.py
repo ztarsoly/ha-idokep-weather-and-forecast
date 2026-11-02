@@ -10,10 +10,14 @@ import voluptuous as vol
 from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.idokep_weather_and_forecast import config_flow
+from custom_components.idokep_weather_and_forecast.api import (
+    IdokepApiClientCommunicationError,
+)
 from custom_components.idokep_weather_and_forecast.config_flow import (
     IdokepFlowHandler,
     IdokepOptionsFlow,
 )
+from custom_components.idokep_weather_and_forecast.station import StationDataError
 
 
 def _flow(
@@ -318,3 +322,94 @@ async def test_user_several_stations_and_merge_method() -> None:
         "station": ["jozsamet", "ha0kaistvan"],
         "merge_method": "average",
     }
+
+
+# ---- the idokep.hu checks behind the dialogs -------------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("data", "error", "expected"),
+    [
+        ({"temperature": 8}, None, None),
+        ({}, None, "connection"),  # a page without a temperature: unknown settlement
+        (None, IdokepApiClientCommunicationError("down"), "connection"),
+        (None, RuntimeError("bug"), "unknown"),
+    ],
+)
+async def test_location_check(
+    data: dict | None, error: Exception | None, expected: str | None
+) -> None:
+    """The settlement is accepted if its current conditions page has a temperature."""
+    client = Mock()
+    client.async_get_current_weather = AsyncMock(return_value=data, side_effect=error)
+    with (
+        patch.object(config_flow, "async_create_clientsession"),
+        patch.object(config_flow, "IdokepApiClient", return_value=client),
+    ):
+        assert await config_flow._async_location_error(Mock(), "Józsa") == expected
+    client.async_get_current_weather.assert_awaited_once_with("Józsa")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("failures", "expected"),
+    [
+        ({}, None),
+        ({"b": StationDataError("unknown code")}, ("station", "b")),
+        ({"a": IdokepApiClientCommunicationError("down")}, ("station_connection", "a")),
+    ],
+)
+async def test_station_check(
+    failures: dict[str, Exception], expected: tuple[str, str] | None
+) -> None:
+    """The first unusable station code is reported with its own error."""
+
+    async def fetch(_session: object, code: str) -> None:
+        if code in failures:
+            raise failures[code]
+
+    with (
+        patch.object(config_flow, "async_create_clientsession"),
+        patch.object(config_flow, "fetch_station", fetch),
+    ):
+        assert await config_flow._async_station_error(Mock(), ["a", "b"]) == expected
+
+
+def test_flow_handler_basics() -> None:
+    """No flow matching; options (Configure) only for location entries."""
+    flow = IdokepFlowHandler()
+    assert flow.is_matching(Mock()) is False
+    location = Mock(data={"location": "Józsa"}, options={})
+    assert isinstance(IdokepFlowHandler.async_get_options_flow(location), IdokepOptionsFlow)
+    assert IdokepFlowHandler.async_supports_options_flow(location)
+    assert not IdokepFlowHandler.async_supports_options_flow(
+        Mock(data={"type": "radar"})
+    )
+
+
+@pytest.mark.asyncio
+async def test_user_unknown_location_is_refused() -> None:
+    """An unknown settlement shows the general error; nothing is created."""
+    location_check, station_check = _patch_checks(location_error="connection")
+    with location_check, station_check:
+        result = await _user_flow().async_step_user(
+            {"name": "Home", "location": "Nowhere"}
+        )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"] == {"base": "connection"}
+
+
+@pytest.mark.asyncio
+async def test_user_unknown_station_is_refused() -> None:
+    """An unknown station code is named in the error."""
+    location_check, station_check = _patch_checks(station_error=("station", "nope"))
+    with location_check, station_check:
+        result = await _user_flow().async_step_user(
+            {"name": "Home", "location": "Debrecen-Józsa", "station": "nope"}
+        )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"] == {"station": "station"}
+    assert result["description_placeholders"] == {"code": "nope"}

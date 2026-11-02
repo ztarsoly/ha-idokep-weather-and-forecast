@@ -34,6 +34,7 @@ from custom_components.idokep_weather_and_forecast.const import (
     RADAR_TITLE,
     RADAR_UNIQUE_ID,
 )
+from custom_components.idokep_weather_and_forecast import image as image_platform
 from custom_components.idokep_weather_and_forecast.image import (
     IdokepRadarImage,
     radar_entity_name,
@@ -44,6 +45,8 @@ from custom_components.idokep_weather_and_forecast.radar import (
     Frame,
     RadarCoordinator,
     RadarImage,
+    _parse_http_date,
+    _unsqueeze,
     build_gif,
     fetch_frame,
 )
@@ -609,3 +612,75 @@ async def test_radar_entry_setup_does_not_create_itself() -> None:
     ):
         await async_setup_entry(hass, entry)
     hass.config_entries.flow.async_init.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Helpers and the image entity's remaining paths
+# ---------------------------------------------------------------------------
+
+
+def test_unsqueeze_keeps_a_frame_of_the_right_shape() -> None:
+    """A frame that already has the map's aspect is returned as it is."""
+    frame = Image.new("RGB", (937, 626))
+    assert _unsqueeze(frame) is frame
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (LM_1, datetime(2026, 10, 29, 23, 37, 36, tzinfo=UTC)),
+        (None, None),
+        ("", None),
+        ("not a date", None),
+    ],
+)
+def test_parse_http_date(value: str | None, expected: datetime | None) -> None:
+    """Last-Modified headers are read as aware times; bad ones are ignored."""
+    assert _parse_http_date(value) == expected
+
+
+def _patch_image_setup() -> tuple[object, object]:
+    """Patch the web client and translations the image needs."""
+    return (
+        patch("homeassistant.components.image.get_async_client"),
+        patch(
+            "custom_components.idokep_weather_and_forecast.image.translation"
+            ".async_get_cached_translations",
+            return_value={},
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_image_setup_adds_the_radar_image(coordinator: RadarCoordinator) -> None:
+    """The Radar entry gets exactly one image entity."""
+    coordinator.config_entry.entry_id = "radar_entry"
+    coordinator.hass.config = Mock(language="en")
+    entry = Mock()
+    entry.runtime_data.coordinator = coordinator
+    add = Mock()
+    client, translations = _patch_image_setup()
+    with client, translations:
+        await image_platform.async_setup_entry(coordinator.hass, entry, add)
+
+    (entities,) = add.call_args[0]
+    assert len(entities) == 1
+    assert isinstance(entities[0], IdokepRadarImage)
+
+
+@pytest.mark.asyncio
+async def test_image_follows_new_animations(coordinator: RadarCoordinator) -> None:
+    """No image before the first animation; a new one updates the time."""
+    coordinator.config_entry.entry_id = "radar_entry"
+    coordinator.hass.config = Mock(language="en")
+    client, translations = _patch_image_setup()
+    with client, translations:
+        entity = IdokepRadarImage(coordinator.hass, coordinator)
+    assert await entity.async_image() is None
+
+    await update_at(coordinator, T0)
+    entity.async_write_ha_state = Mock()
+    entity._handle_coordinator_update()
+
+    assert entity.image_last_updated == coordinator.data.updated
+    entity.async_write_ha_state.assert_called_once()

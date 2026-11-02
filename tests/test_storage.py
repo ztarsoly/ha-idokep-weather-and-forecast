@@ -163,3 +163,15 @@ def test_broken_saved_data_restores_nothing(item: dict) -> None:
 def test_unknown_source_restores_nothing() -> None:
     """Data for a page that is no longer used (e.g. the old "daily") is ignored."""
     assert restore("daily", saved({"daily_forecast": []}, NOW), NOW) == {}
+
+
+def test_restore_skips_hourly_items_without_a_valid_time() -> None:
+    """Hourly items without a time, or with a broken one, are dropped."""
+    valid = {"datetime": "2026-10-29T20:00:00+01:00", "temperature": 10}
+    saved = {
+        "fetched": (NOW - timedelta(minutes=30)).isoformat(),
+        "data": {
+            "hourly_forecast": [{"temperature": 1}, {"datetime": "broken"}, valid],
+        },
+    }
+    assert restore(HOURLY, saved, NOW)["hourly_forecast"] == [valid]

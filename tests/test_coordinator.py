@@ -594,3 +594,33 @@ class TestSavedData:
 
         assert coordinator._source_data[CURRENT] == {}
         client.restore_hourly_forecast.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_restore_ignores_unknown_and_expired_pages(
+    coordinator: IdokepDataUpdateCoordinator,
+    fake_store: type[FakeStore],
+) -> None:
+    """Unknown page names and pages with nothing still valid are not restored."""
+    coordinator.config_entry.entry_id = "entry1"
+    fake_store.files["idokep_weather_and_forecast.entry1"] = {
+        "location": "Budapest",
+        "sources": {
+            "unknown_page": {
+                "fetched": local(2026, 10, 30, 12, 45).isoformat(),
+                "data": {},
+            },
+            # Saved the day before: current conditions are kept for an hour only
+            CURRENT: {
+                "fetched": local(2026, 10, 29, 12, 45).isoformat(),
+                "data": CURRENT_DATA,
+            },
+        },
+    }
+    with patch.object(
+        dt_util, "utcnow", return_value=dt_util.as_utc(local(2026, 10, 30, 12, 51))
+    ):
+        await coordinator.async_restore()
+
+    assert coordinator._source_data[CURRENT] == {}
+    assert "unknown_page" not in coordinator._source_data
