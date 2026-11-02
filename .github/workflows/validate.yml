@@ -2,6 +2,8 @@ name: Validate
 
 on:
   workflow_dispatch:
+  # Run by the Release workflow before publishing
+  workflow_call:
   schedule:
     - cron:  "0 0 * * *"
   push:

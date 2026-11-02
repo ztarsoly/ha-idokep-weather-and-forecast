@@ -8,6 +8,8 @@ on:
     branches:
       - "main"
   workflow_dispatch:
+  # Run by the Release workflow before publishing
+  workflow_call:
 
 permissions:
   contents: read
