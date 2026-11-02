@@ -19,11 +19,15 @@ from custom_components.idokep_weather_and_forecast.api import (
 )
 from custom_components.idokep_weather_and_forecast.const import DOMAIN
 from custom_components.idokep_weather_and_forecast.sensor import (
+    ENTITY_DESCRIPTIONS,
     STATION_DESCRIPTIONS,
+    STATION_DEW_POINT_DESCRIPTION,
     STATION_MEASUREMENT_TIME_DESCRIPTION,
+    IdokepStationDewPointSensor,
     IdokepStationMeasurementTimeSensor,
     IdokepStationSensor,
     async_setup_entry,
+    dew_point,
 )
 from custom_components.idokep_weather_and_forecast.station import (
     _MASK32,
@@ -226,6 +230,28 @@ def test_merge_average() -> None:
     assert data.sources["uv"] == ("b",)
 
 
+@pytest.mark.parametrize("method", ["priority", "average"])
+def test_merge_rounds_to_two_decimals(method: str) -> None:
+    """Merged values have at most 2 decimals, whichever the method."""
+    c = _station("c", 1, hom=10.123, csap24=0.004, szelirany=10.0)
+    d = _station("d", 1, hom=10.0, csap24=0.0, szelirany=20.0)
+
+    values = merge_readings([c, d], method).values
+
+    if method == "priority":
+        assert values == {"hom": 10.12, "csap24": 0.0, "szelirany": 10.0}
+    else:
+        # (10.123 + 10) / 2 = 10.0615; bearings 10° and 20° -> 15°
+        assert values == {"hom": 10.06, "csap24": 0.0, "szelirany": 15.0}
+
+
+def test_merge_average_keeps_hundredths() -> None:
+    """Rain in 0.01 mm survives averaging (it used to be rounded to 0.1)."""
+    c = _station("c", 1, csap24=0.04)
+    d = _station("d", 1, csap24=0.02)
+    assert merge_readings([c, d], "average").values == {"csap24": 0.03}
+
+
 def test_merge_without_fresh_readings() -> None:
     """Reported but too old everywhere: unknown (None), still available."""
     stale = StationReadings("a", {}, frozenset({"hom"}), NOW - timedelta(hours=3))
@@ -345,6 +371,19 @@ def test_station_description_classes() -> None:
     assert by_key["uv"].device_class is None
 
 
+def test_numeric_sensors_display_one_decimal() -> None:
+    """Every sensor with a unit suggests 1 decimal; the others none."""
+    descriptions = (
+        *ENTITY_DESCRIPTIONS,
+        *STATION_DESCRIPTIONS,
+        STATION_DEW_POINT_DESCRIPTION,
+        STATION_MEASUREMENT_TIME_DESCRIPTION,
+    )
+    for description in descriptions:
+        expected = 1 if description.native_unit_of_measurement else None
+        assert description.suggested_display_precision == expected, description.key
+
+
 def _station_mock(data: StationData | None) -> Mock:
     coordinator = Mock(spec=StationCoordinator)
     coordinator.config_entry = Mock(entry_id="entry1", title="Debrecen-Józsa")
@@ -408,8 +447,9 @@ async def test_setup_adds_station_sensors_only_with_station() -> None:
     add = Mock()
     await async_setup_entry(Mock(), entry, add)
     station_sensors = list(add.call_args_list[1][0][0])
-    # The 12 measurements plus the time of the newest reading
-    assert len(station_sensors) == len(SERIES_KEYS) + 1
+    # The 12 measurements, the dew point and the time of the newest reading
+    assert len(station_sensors) == len(SERIES_KEYS) + 2
+    assert isinstance(station_sensors[-2], IdokepStationDewPointSensor)
     assert isinstance(station_sensors[-1], IdokepStationMeasurementTimeSensor)
 
     entry.runtime_data.station = None
@@ -522,3 +562,59 @@ def test_station_measurement_time_sensor() -> None:
     assert not IdokepStationMeasurementTimeSensor(
         _station_mock(no_reading), STATION_MEASUREMENT_TIME_DESCRIPTION
     ).available
+
+
+@pytest.mark.parametrize(
+    ("temperature", "humidity", "expected"),
+    [
+        (20.0, 50.0, 9.26),
+        (10.0, 100.0, 10.0),  # saturated: dew point = temperature
+        (-5.0, 80.0, -7.92),
+        (30.0, 70.0, 23.93),
+        (20.0, None, None),
+        (None, 50.0, None),
+        (20.0, 0.0, None),  # no water vapour: no dew point
+    ],
+)
+def test_dew_point(
+    temperature: float | None, humidity: float | None, expected: float | None
+) -> None:
+    """Magnus formula, rounded to 2 decimals."""
+    assert dew_point(temperature, humidity) == expected
+
+
+def test_station_dew_point_sensor() -> None:
+    """Dew point from the merged temperature and humidity, naming both sources."""
+    data = StationData(
+        values={"hom": 20.0, "rh": 50.0},
+        sources={"hom": ("jozsamet",), "rh": ("jozsamet", "olig13")},
+        available=frozenset({"hom", "rh"}),
+        measured=NOW,
+    )
+    sensor = IdokepStationDewPointSensor(
+        _station_mock(data), STATION_DEW_POINT_DESCRIPTION
+    )
+
+    assert sensor.unique_id == "entry1_station_dew_point"
+    assert sensor.device_class == SensorDeviceClass.TEMPERATURE
+    assert sensor.native_unit_of_measurement == "°C"
+    assert sensor.available
+    assert sensor.native_value == 9.26
+    assert sensor.extra_state_attributes == {"stations": ["jozsamet", "olig13"]}
+
+
+def test_station_dew_point_sensor_needs_both_inputs() -> None:
+    """Unavailable without humidity; unknown without a fresh reading."""
+    no_humidity = StationData(values={"hom": 20.0}, available=frozenset({"hom"}))
+    assert not IdokepStationDewPointSensor(
+        _station_mock(no_humidity), STATION_DEW_POINT_DESCRIPTION
+    ).available
+
+    stale = StationData(
+        values={"hom": 20.0, "rh": None}, available=frozenset({"hom", "rh"})
+    )
+    sensor = IdokepStationDewPointSensor(
+        _station_mock(stale), STATION_DEW_POINT_DESCRIPTION
+    )
+    assert sensor.available
+    assert sensor.native_value is None

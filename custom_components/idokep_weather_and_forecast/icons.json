@@ -56,6 +56,9 @@
       "station_water_temperature": {
         "default": "mdi:pool-thermometer"
       },
+      "station_dew_point": {
+        "default": "mdi:thermometer-water"
+      },
       "station_measurement_time": {
         "default": "mdi:clock-outline"
       },

@@ -143,6 +143,9 @@
             "station_water_temperature": {
                 "name": "Vízhőmérséklet"
             },
+            "station_dew_point": {
+                "name": "Harmatpont"
+            },
             "station_measurement_time": {
                 "name": "Mérés ideje"
             }

@@ -12,7 +12,7 @@ Az integráció az idokep.hu nyilvános oldalait olvassa (nincs hivatalos API, f
 - **Időjárás entitás** óránkénti és napi (kb. 23 napos) előrejelzéssel, a Home Assistant új forecast API-jával
 - **Előrejelzési szenzorok**: hőmérséklet, állapot, mai maximum/minimum, szélirány, szélerősség, becsült szélsebesség, csapadék, csapadék valószínűsége
 - **Riasztások**: vihar a következő órában, általános, sárga, narancs és piros riasztás
-- **Időjárás-állomások** (nem kötelező): egy vagy több idokep.hu automata 12 mért adata egy eszközben összevonva, és a mérés ideje
+- **Időjárás-állomások** (nem kötelező): egy vagy több idokep.hu automata 12 mért adata egy eszközben összevonva, a belőlük számított harmatpont és a mérés ideje
 - **Országos radar**: animált GIF az utolsó 5 radarképből, külön szolgáltatásként
 - Magyar és angol fordítás, a Home Assistant nyelvének megfelelően
 - Csak a szükséges oldalakat tölti le, és a legutóbbi jó adatokat lemezre menti, így újraindítás után is azonnal van adat
@@ -63,6 +63,7 @@ Minden szenzor `stations` attribútuma mutatja, melyik állomás(ok)tól szárma
 | UV-B index | – |
 | Globálsugárzás | W/m² |
 | Vízhőmérséklet | °C |
+| Harmatpont | °C (számított, a hőmérsékletből és a páratartalomból) |
 | Mérés ideje | időbélyeg |
 
 ### `National Radar Image` – Radar szolgáltatás

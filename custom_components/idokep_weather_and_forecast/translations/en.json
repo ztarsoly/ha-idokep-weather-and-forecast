@@ -143,6 +143,9 @@
             "station_water_temperature": {
                 "name": "Water temperature"
             },
+            "station_dew_point": {
+                "name": "Dew point"
+            },
             "station_measurement_time": {
                 "name": "Measurement time"
             }

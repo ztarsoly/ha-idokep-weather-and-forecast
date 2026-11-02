@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 from homeassistant.components.sensor import (
@@ -34,6 +35,9 @@ if TYPE_CHECKING:
     from .coordinator import IdokepDataUpdateCoordinator
     from .data import IdokepConfigEntry
     from .station import StationCoordinator, StationData
+
+# Numeric sensors are shown with 1 decimal (users can change it per entity)
+DISPLAY_PRECISION = 1
 
 # 16-point compass, clockwise from north; states are translated to N, NNE, ...
 COMPASS_POINTS = [
@@ -77,11 +81,25 @@ def bearing_to_compass(bearing: float | None) -> str | None:
     return COMPASS_POINTS[round(bearing / step) % len(COMPASS_POINTS)]
 
 
+# Magnus formula constants (Alduchov & Eskridge, 1996), for -40...50 °C
+MAGNUS_B = 17.625
+MAGNUS_C = 243.04
+
+
+def dew_point(temperature: float | None, humidity: float | None) -> float | None:
+    """Return the dew point (°C, 2 decimals) from temperature and humidity (%)."""
+    if temperature is None or humidity is None or not 0 < humidity <= 100:
+        return None
+    gamma = math.log(humidity / 100) + MAGNUS_B * temperature / (MAGNUS_C + temperature)
+    return round(MAGNUS_C * gamma / (MAGNUS_B - gamma), 2)
+
+
 ENTITY_DESCRIPTIONS = (
     SensorEntityDescription(
         key="temperature",
         translation_key="temperature",
         native_unit_of_measurement="°C",
+        suggested_display_precision=DISPLAY_PRECISION,
         device_class=SensorDeviceClass.TEMPERATURE,
     ),
     # Today's forecast high/low: forecasts, not measurements, so no state_class
@@ -89,12 +107,14 @@ ENTITY_DESCRIPTIONS = (
         key="temperature_max_today",
         translation_key="temperature_max_today",
         native_unit_of_measurement="°C",
+        suggested_display_precision=DISPLAY_PRECISION,
         device_class=SensorDeviceClass.TEMPERATURE,
     ),
     SensorEntityDescription(
         key="temperature_min_today",
         translation_key="temperature_min_today",
         native_unit_of_measurement="°C",
+        suggested_display_precision=DISPLAY_PRECISION,
         device_class=SensorDeviceClass.TEMPERATURE,
     ),
     # Enum so the frontend shows translated names (state.* in translations)
@@ -108,6 +128,7 @@ ENTITY_DESCRIPTIONS = (
         key="wind_bearing",
         translation_key="wind_bearing",
         native_unit_of_measurement=DEGREE,
+        suggested_display_precision=DISPLAY_PRECISION,
         device_class=SensorDeviceClass.WIND_DIRECTION,
     ),
     # Same bearing as wind_bearing, shown as a compass point
@@ -129,6 +150,7 @@ ENTITY_DESCRIPTIONS = (
         key="wind_speed",
         translation_key="wind_speed",
         native_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
+        suggested_display_precision=DISPLAY_PRECISION,
         device_class=SensorDeviceClass.WIND_SPEED,
     ),
     # The current hour's amount: its share of the day's total (by rain bar)
@@ -136,6 +158,7 @@ ENTITY_DESCRIPTIONS = (
         key="precipitation",
         translation_key="precipitation",
         native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
+        suggested_display_precision=DISPLAY_PRECISION,
         device_class=SensorDeviceClass.PRECIPITATION,
     ),
     # The current hour's chance of precipitation; 0 when the page shows none
@@ -143,6 +166,7 @@ ENTITY_DESCRIPTIONS = (
         key="precipitation_probability",
         translation_key="precipitation_probability",
         native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=DISPLAY_PRECISION,
     ),
 )
 
@@ -154,24 +178,28 @@ STATION_DESCRIPTIONS = (
         key="hom",
         translation_key="station_temperature",
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        suggested_display_precision=DISPLAY_PRECISION,
         device_class=SensorDeviceClass.TEMPERATURE,
     ),
     SensorEntityDescription(
         key="rh",
         translation_key="station_humidity",
         native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=DISPLAY_PRECISION,
         device_class=SensorDeviceClass.HUMIDITY,
     ),
     SensorEntityDescription(
         key="p",
         translation_key="station_pressure",
         native_unit_of_measurement=UnitOfPressure.HPA,
+        suggested_display_precision=DISPLAY_PRECISION,
         device_class=SensorDeviceClass.ATMOSPHERIC_PRESSURE,
     ),
     SensorEntityDescription(
         key="csap24",
         translation_key="station_precipitation_24h",
         native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
+        suggested_display_precision=DISPLAY_PRECISION,
         device_class=SensorDeviceClass.PRECIPITATION,
     ),
     # Resets at midnight
@@ -179,47 +207,55 @@ STATION_DESCRIPTIONS = (
         key="csap23",
         translation_key="station_precipitation_today",
         native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
+        suggested_display_precision=DISPLAY_PRECISION,
         device_class=SensorDeviceClass.PRECIPITATION,
     ),
     SensorEntityDescription(
         key="csap1",
         translation_key="station_precipitation_intensity",
         native_unit_of_measurement=UnitOfVolumetricFlux.MILLIMETERS_PER_HOUR,
+        suggested_display_precision=DISPLAY_PRECISION,
         device_class=SensorDeviceClass.PRECIPITATION_INTENSITY,
     ),
     SensorEntityDescription(
         key="szelero",
         translation_key="station_wind_speed",
         native_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
+        suggested_display_precision=DISPLAY_PRECISION,
         device_class=SensorDeviceClass.WIND_SPEED,
     ),
     SensorEntityDescription(
         key="szellokes",
         translation_key="station_wind_gust",
         native_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
+        suggested_display_precision=DISPLAY_PRECISION,
         device_class=SensorDeviceClass.WIND_SPEED,
     ),
     SensorEntityDescription(
         key="szelirany",
         translation_key="station_wind_bearing",
         native_unit_of_measurement=DEGREE,
+        suggested_display_precision=DISPLAY_PRECISION,
         device_class=SensorDeviceClass.WIND_DIRECTION,
     ),
     SensorEntityDescription(
         key="uv",
         translation_key="station_uv_index",
         native_unit_of_measurement=UV_INDEX,
+        suggested_display_precision=DISPLAY_PRECISION,
     ),
     SensorEntityDescription(
         key="napfeny",
         translation_key="station_solar_radiation",
         native_unit_of_measurement=UnitOfIrradiance.WATTS_PER_SQUARE_METER,
+        suggested_display_precision=DISPLAY_PRECISION,
         device_class=SensorDeviceClass.IRRADIANCE,
     ),
     SensorEntityDescription(
         key="vizho",
         translation_key="station_water_temperature",
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        suggested_display_precision=DISPLAY_PRECISION,
         device_class=SensorDeviceClass.TEMPERATURE,
     ),
 )
@@ -228,6 +264,14 @@ STATION_MEASUREMENT_TIME_DESCRIPTION = SensorEntityDescription(
     key="measurement_time",
     translation_key="station_measurement_time",
     device_class=SensorDeviceClass.TIMESTAMP,
+)
+# Calculated from the merged temperature and humidity
+STATION_DEW_POINT_DESCRIPTION = SensorEntityDescription(
+    key="dew_point",
+    translation_key="station_dew_point",
+    native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+    suggested_display_precision=DISPLAY_PRECISION,
+    device_class=SensorDeviceClass.TEMPERATURE,
 )
 
 
@@ -251,6 +295,7 @@ async def async_setup_entry(
                     IdokepStationSensor(station, entity_description)
                     for entity_description in STATION_DESCRIPTIONS
                 ),
+                IdokepStationDewPointSensor(station, STATION_DEW_POINT_DESCRIPTION),
                 IdokepStationMeasurementTimeSensor(
                     station, STATION_MEASUREMENT_TIME_DESCRIPTION
                 ),
@@ -336,6 +381,28 @@ class IdokepStationSensor(IdokepStationEntity, SensorEntity):
             return None
         sources = self._sources(self.coordinator.data)
         return {"stations": list(sources)} if sources else None
+
+
+class IdokepStationDewPointSensor(IdokepStationSensor):
+    """Dew point calculated from the stations' temperature and humidity."""
+
+    INPUTS = ("hom", "rh")
+
+    def _reported(self, data: StationData) -> bool:
+        """Return True if the stations report both temperature and humidity."""
+        return all(key in data.available for key in self.INPUTS)
+
+    def _sources(self, data: StationData) -> tuple[str, ...]:
+        """Return the stations the temperature and humidity come from."""
+        return tuple(
+            dict.fromkeys(c for key in self.INPUTS for c in data.sources.get(key, ()))
+        )
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the dew point (None without fresh temperature and humidity)."""
+        values = self.coordinator.data.values
+        return dew_point(values.get("hom"), values.get("rh"))
 
 
 class IdokepStationMeasurementTimeSensor(IdokepStationSensor):

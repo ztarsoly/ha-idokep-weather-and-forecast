@@ -274,13 +274,17 @@ def latest_readings(
     return StationReadings(code, readings, frozenset(available), last)
 
 
+# Merged values are rounded to 2 decimals
+DECIMALS = 2
+
+
 def _average(key: str, readings: list[Reading]) -> float:
     """Return the readings' mean; wind bearings are averaged as angles."""
     if key == "szelirany":
         sin = sum(math.sin(math.radians(r.value)) for r in readings)
         cos = sum(math.cos(math.radians(r.value)) for r in readings)
-        return round(math.degrees(math.atan2(sin, cos)), 1) % 360
-    return round(sum(r.value for r in readings) / len(readings), 1)
+        return round(math.degrees(math.atan2(sin, cos)), DECIMALS) % 360
+    return round(sum(r.value for r in readings) / len(readings), DECIMALS)
 
 
 def merge_readings(stations: list[StationReadings], method: str) -> StationData:
@@ -304,7 +308,7 @@ def merge_readings(stations: list[StationReadings], method: str) -> StationData:
             values[key] = _average(key, chosen)
         else:
             chosen = candidates[:1]
-            values[key] = chosen[0].value
+            values[key] = round(chosen[0].value, DECIMALS)
         sources[key] = tuple(reading.code for reading in chosen)
         used.extend(chosen)
     times = [r.time for r in used] or [s.last for s in stations if s.last]
