@@ -167,21 +167,32 @@ class TestIdokepWeatherEntity:
     def test_extra_state_attributes_precipitation(
         self, mock_coordinator: Mock, amount: float
     ) -> None:
-        """The current hour's precipitation is the only extra attribute."""
+        """The settlement and the current hour's precipitation are the extras."""
         mock_coordinator.data = {**mock_coordinator.data, "precipitation": amount}
         entity = IdokepWeatherEntity(mock_coordinator)
         # Temperature, units etc. are standard weather attributes set by HA
-        assert entity.extra_state_attributes == {"precipitation": amount}
+        assert entity.extra_state_attributes == {
+            "settlement": "Budapest",
+            "precipitation": amount,
+        }
 
     def test_extra_state_attributes_without_precipitation(
         self, mock_coordinator: Mock
     ) -> None:
-        """No attribute until the forecast page has been read."""
+        """Only the settlement until the forecast page has been read."""
         mock_coordinator.data = {
             k: v for k, v in mock_coordinator.data.items() if k != "precipitation"
         }
         entity = IdokepWeatherEntity(mock_coordinator)
-        assert entity.extra_state_attributes is None
+        assert entity.extra_state_attributes == {"settlement": "Budapest"}
+
+    def test_settlement_attribute_follows_the_entry(
+        self, mock_coordinator: Mock
+    ) -> None:
+        """The settlement as configured (changed in Configure, it follows)."""
+        mock_coordinator.config_entry.data = {"location": "Debrecen-Józsa"}
+        entity = IdokepWeatherEntity(mock_coordinator)
+        assert entity.extra_state_attributes["settlement"] == "Debrecen-Józsa"
 
     @pytest.mark.asyncio
     async def test_async_forecast_hourly(self, mock_coordinator: Mock) -> None:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import math
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from homeassistant.components.sensor import (
@@ -14,7 +14,9 @@ from homeassistant.const import (
     DEGREE,
     PERCENTAGE,
     UV_INDEX,
+    CONCENTRATION_GRAMS_PER_CUBIC_METER,
     UnitOfIrradiance,
+    UnitOfLength,
     UnitOfPrecipitationDepth,
     UnitOfPressure,
     UnitOfSpeed,
@@ -22,11 +24,13 @@ from homeassistant.const import (
     UnitOfVolumetricFlux,
 )
 
+from . import calculations
 from .api import WeatherConditionMapper, WindStrengthMapper
 from .coordinator import CURRENT, HOURLY
 from .entity import IdokepEntity, IdokepStationEntity
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from datetime import datetime
 
     from homeassistant.core import HomeAssistant
@@ -79,19 +83,6 @@ def bearing_to_compass(bearing: float | None) -> str | None:
     # Each point covers 22.5 degrees centred on it: N is 348.75-11.25
     step = 360 / len(COMPASS_POINTS)
     return COMPASS_POINTS[round(bearing / step) % len(COMPASS_POINTS)]
-
-
-# Magnus formula constants (Alduchov & Eskridge, 1996), for -40...50 °C
-MAGNUS_B = 17.625
-MAGNUS_C = 243.04
-
-
-def dew_point(temperature: float | None, humidity: float | None) -> float | None:
-    """Return the dew point (°C, 2 decimals) from temperature and humidity (%)."""
-    if temperature is None or humidity is None or not 0 < humidity <= 100:
-        return None
-    gamma = math.log(humidity / 100) + MAGNUS_B * temperature / (MAGNUS_C + temperature)
-    return round(MAGNUS_C * gamma / (MAGNUS_B - gamma), 2)
 
 
 ENTITY_DESCRIPTIONS = (
@@ -265,14 +256,77 @@ STATION_MEASUREMENT_TIME_DESCRIPTION = SensorEntityDescription(
     translation_key="station_measurement_time",
     device_class=SensorDeviceClass.TIMESTAMP,
 )
-# Calculated from the merged temperature and humidity
-STATION_DEW_POINT_DESCRIPTION = SensorEntityDescription(
-    key="dew_point",
-    translation_key="station_dew_point",
-    native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-    suggested_display_precision=DISPLAY_PRECISION,
-    device_class=SensorDeviceClass.TEMPERATURE,
+
+
+@dataclass(frozen=True, kw_only=True)
+class IdokepCalculatedSensorEntityDescription(SensorEntityDescription):
+    """A value calculated from merged station measurements."""
+
+    # Series keys passed to value_fn, in order
+    inputs: tuple[str, ...]
+    value_fn: Callable[..., float | None]
+
+
+# Calculated from the merged temperature and humidity (and wind speed)
+# pylint doesn't see the fields inherited through HA's FrozenOrThawed metaclass
+# pylint: disable=unexpected-keyword-arg
+STATION_CALCULATED_DESCRIPTIONS = (
+    IdokepCalculatedSensorEntityDescription(
+        key="dew_point",
+        translation_key="station_dew_point",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        suggested_display_precision=DISPLAY_PRECISION,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        inputs=("hom", "rh"),
+        value_fn=calculations.dew_point,
+    ),
+    IdokepCalculatedSensorEntityDescription(
+        key="apparent_temperature",
+        translation_key="station_apparent_temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        suggested_display_precision=DISPLAY_PRECISION,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        inputs=("hom", "rh", "szelero"),
+        value_fn=calculations.apparent_temperature,
+    ),
+    IdokepCalculatedSensorEntityDescription(
+        key="wet_bulb_temperature",
+        translation_key="station_wet_bulb_temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        suggested_display_precision=DISPLAY_PRECISION,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        inputs=("hom", "rh"),
+        value_fn=calculations.wet_bulb_temperature,
+    ),
+    IdokepCalculatedSensorEntityDescription(
+        key="absolute_humidity",
+        translation_key="station_absolute_humidity",
+        native_unit_of_measurement=CONCENTRATION_GRAMS_PER_CUBIC_METER,
+        suggested_display_precision=DISPLAY_PRECISION,
+        device_class=SensorDeviceClass.ABSOLUTE_HUMIDITY,
+        inputs=("hom", "rh"),
+        value_fn=calculations.absolute_humidity,
+    ),
+    IdokepCalculatedSensorEntityDescription(
+        key="vapour_pressure_deficit",
+        translation_key="station_vapour_pressure_deficit",
+        native_unit_of_measurement=UnitOfPressure.KPA,
+        suggested_display_precision=DISPLAY_PRECISION,
+        device_class=SensorDeviceClass.PRESSURE,
+        inputs=("hom", "rh"),
+        value_fn=calculations.vapour_pressure_deficit,
+    ),
+    IdokepCalculatedSensorEntityDescription(
+        key="cloud_base",
+        translation_key="station_cloud_base",
+        native_unit_of_measurement=UnitOfLength.METERS,
+        suggested_display_precision=DISPLAY_PRECISION,
+        device_class=SensorDeviceClass.DISTANCE,
+        inputs=("hom", "rh"),
+        value_fn=calculations.cloud_base,
+    ),
 )
+# pylint: enable=unexpected-keyword-arg
 
 
 async def async_setup_entry(
@@ -295,7 +349,10 @@ async def async_setup_entry(
                     IdokepStationSensor(station, entity_description)
                     for entity_description in STATION_DESCRIPTIONS
                 ),
-                IdokepStationDewPointSensor(station, STATION_DEW_POINT_DESCRIPTION),
+                *(
+                    IdokepStationCalculatedSensor(station, entity_description)
+                    for entity_description in STATION_CALCULATED_DESCRIPTIONS
+                ),
                 IdokepStationMeasurementTimeSensor(
                     station, STATION_MEASUREMENT_TIME_DESCRIPTION
                 ),
@@ -383,26 +440,33 @@ class IdokepStationSensor(IdokepStationEntity, SensorEntity):
         return {"stations": list(sources)} if sources else None
 
 
-class IdokepStationDewPointSensor(IdokepStationSensor):
-    """Dew point calculated from the stations' temperature and humidity."""
+class IdokepStationCalculatedSensor(IdokepStationSensor):
+    """A value calculated from the stations' merged measurements."""
 
-    INPUTS = ("hom", "rh")
+    entity_description: IdokepCalculatedSensorEntityDescription
 
     def _reported(self, data: StationData) -> bool:
-        """Return True if the stations report both temperature and humidity."""
-        return all(key in data.available for key in self.INPUTS)
+        """Return True if the stations report every input."""
+        return all(key in data.available for key in self.entity_description.inputs)
 
     def _sources(self, data: StationData) -> tuple[str, ...]:
-        """Return the stations the temperature and humidity come from."""
+        """Return the stations the inputs come from."""
         return tuple(
-            dict.fromkeys(c for key in self.INPUTS for c in data.sources.get(key, ()))
+            dict.fromkeys(
+                code
+                for key in self.entity_description.inputs
+                for code in data.sources.get(key, ())
+            )
         )
 
     @property
     def native_value(self) -> float | None:
-        """Return the dew point (None without fresh temperature and humidity)."""
+        """Return the value (None without fresh readings of every input)."""
         values = self.coordinator.data.values
-        return dew_point(values.get("hom"), values.get("rh"))
+        inputs = [values.get(key) for key in self.entity_description.inputs]
+        if any(value is None for value in inputs):
+            return None
+        return self.entity_description.value_fn(*inputs)
 
 
 class IdokepStationMeasurementTimeSensor(IdokepStationSensor):

@@ -27,6 +27,11 @@
             "already_configured": "This entry is already configured."
         }
     },
+    "device": {
+        "national_radar": {
+            "name": "National Radar Image"
+        }
+    },
     "entity": {
         "sensor": {
             "temperature": {
@@ -111,7 +116,7 @@
                 "name": "Temperature"
             },
             "station_humidity": {
-                "name": "Humidity"
+                "name": "Relative humidity"
             },
             "station_pressure": {
                 "name": "Pressure"
@@ -146,6 +151,21 @@
             "station_dew_point": {
                 "name": "Dew point"
             },
+            "station_apparent_temperature": {
+                "name": "Apparent temperature"
+            },
+            "station_wet_bulb_temperature": {
+                "name": "Wet-bulb temperature"
+            },
+            "station_absolute_humidity": {
+                "name": "Absolute humidity"
+            },
+            "station_vapour_pressure_deficit": {
+                "name": "Vapour pressure deficit"
+            },
+            "station_cloud_base": {
+                "name": "Cloud base"
+            },
             "station_measurement_time": {
                 "name": "Measurement time"
             }
@@ -165,6 +185,11 @@
             },
             "alert_red": {
                 "name": "Red Alert"
+            }
+        },
+        "image": {
+            "national_radar": {
+                "name": "National radar image"
             }
         }
     },

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import io
+import json
 from datetime import UTC, datetime, timedelta
 from logging import getLogger
+from pathlib import Path
 from typing import TYPE_CHECKING, TypeVar
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
@@ -32,7 +34,10 @@ from custom_components.idokep_weather_and_forecast.const import (
     RADAR_TITLE,
     RADAR_UNIQUE_ID,
 )
-from custom_components.idokep_weather_and_forecast.image import IdokepRadarImage
+from custom_components.idokep_weather_and_forecast.image import (
+    IdokepRadarImage,
+    radar_entity_name,
+)
 from custom_components.idokep_weather_and_forecast.radar import (
     FRAME_COUNT,
     LAST_FRAME_MS,
@@ -47,6 +52,10 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 T = TypeVar("T")
+
+COMPONENT_DIR = (
+    Path(__file__).parent.parent / "custom_components" / "idokep_weather_and_forecast"
+)
 
 LM_1 = "Thu, 29 Oct 2026 23:37:36 GMT"
 LM_2 = "Thu, 29 Oct 2026 23:42:36 GMT"
@@ -427,20 +436,64 @@ async def test_retries_every_minute_after_failure(
 async def test_image_entity(coordinator: RadarCoordinator) -> None:
     """Names, device and the GIF as requested."""
     coordinator.config_entry.entry_id = "radar_entry"
+    coordinator.hass.config = Mock(language="en")
     await update_at(coordinator, T0)
     # ImageEntity asks Home Assistant for its shared web client
-    with patch("homeassistant.components.image.get_async_client"):
+    with (
+        patch("homeassistant.components.image.get_async_client"),
+        patch(
+            "custom_components.idokep_weather_and_forecast.image.translation"
+            ".async_get_cached_translations",
+            return_value={},
+        ),
+    ):
         entity = IdokepRadarImage(coordinator.hass, coordinator)
 
+    # Without a translation: English
     assert entity.name == "National radar image"
     assert entity.content_type == "image/gif"
     assert entity.unique_id == "radar_entry_national_radar"
-    assert entity.device_info["name"] == "National Radar Image"
+    # The device's name comes from the "device" translations
+    assert "name" not in entity.device_info
+    assert entity.device_info["translation_key"] == "national_radar"
     assert entity.device_info["model"] == "National radar image"
     assert entity.device_info["identifiers"] == {(DOMAIN, "radar_entry")}
     assert entity.device_info["configuration_url"] == "https://www.idokep.hu/radar"
     assert entity.image_last_updated == coordinator.data.updated
     assert await entity.async_image() == coordinator.data.gif
+
+
+@pytest.mark.parametrize(
+    ("language", "entity_name", "device_name"),
+    [
+        ("en", "National radar image", "National Radar Image"),
+        ("hu", "Országos radarkép", "Országos Radarkép"),
+    ],
+)
+def test_radar_names_are_translated(
+    language: str, entity_name: str, device_name: str
+) -> None:
+    """The translation files name the image and its device in both languages."""
+    strings = json.loads(
+        (COMPONENT_DIR / "translations" / f"{language}.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert strings["entity"]["image"]["national_radar"]["name"] == entity_name
+    assert strings["device"]["national_radar"]["name"] == device_name
+
+    flat = {
+        f"component.{DOMAIN}.entity.image.national_radar.name": entity_name,
+    }
+    hass = Mock()
+    hass.config.language = language
+    with patch(
+        "custom_components.idokep_weather_and_forecast.image.translation"
+        ".async_get_cached_translations",
+        return_value=flat,
+    ) as get:
+        assert radar_entity_name(hass) == entity_name
+    get.assert_called_once_with(hass, language, "entity", DOMAIN)
 
 
 # ---------------------------------------------------------------------------

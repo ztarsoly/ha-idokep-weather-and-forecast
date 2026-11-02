@@ -59,6 +59,21 @@
       "station_dew_point": {
         "default": "mdi:thermometer-water"
       },
+      "station_apparent_temperature": {
+        "default": "mdi:thermometer-lines"
+      },
+      "station_wet_bulb_temperature": {
+        "default": "mdi:water-thermometer"
+      },
+      "station_absolute_humidity": {
+        "default": "mdi:water"
+      },
+      "station_vapour_pressure_deficit": {
+        "default": "mdi:leaf"
+      },
+      "station_cloud_base": {
+        "default": "mdi:cloud-arrow-up"
+      },
       "station_measurement_time": {
         "default": "mdi:clock-outline"
       },

@@ -20,14 +20,13 @@ from custom_components.idokep_weather_and_forecast.api import (
 from custom_components.idokep_weather_and_forecast.const import DOMAIN
 from custom_components.idokep_weather_and_forecast.sensor import (
     ENTITY_DESCRIPTIONS,
+    STATION_CALCULATED_DESCRIPTIONS,
     STATION_DESCRIPTIONS,
-    STATION_DEW_POINT_DESCRIPTION,
     STATION_MEASUREMENT_TIME_DESCRIPTION,
-    IdokepStationDewPointSensor,
+    IdokepStationCalculatedSensor,
     IdokepStationMeasurementTimeSensor,
     IdokepStationSensor,
     async_setup_entry,
-    dew_point,
 )
 from custom_components.idokep_weather_and_forecast.station import (
     _MASK32,
@@ -357,8 +356,11 @@ async def test_update_skips_a_failed_station() -> None:
 def test_station_descriptions_cover_all_series() -> None:
     """One sensor per series (12), each with its own name."""
     assert sorted(d.key for d in STATION_DESCRIPTIONS) == sorted(SERIES_KEYS)
-    keys = [d.translation_key for d in STATION_DESCRIPTIONS]
-    assert len(set(keys)) == len(SERIES_KEYS)
+    keys = [
+        d.translation_key
+        for d in (*STATION_DESCRIPTIONS, *STATION_CALCULATED_DESCRIPTIONS)
+    ]
+    assert len(set(keys)) == len(keys)
     assert all(key.startswith("station_") for key in keys)
 
 
@@ -366,6 +368,7 @@ def test_station_description_classes() -> None:
     """Device classes of a few station sensors; none has a state class."""
     by_key = {d.key: d for d in STATION_DESCRIPTIONS}
     assert by_key["hom"].device_class == SensorDeviceClass.TEMPERATURE
+    assert by_key["rh"].device_class == SensorDeviceClass.HUMIDITY
     assert by_key["szelirany"].device_class == SensorDeviceClass.WIND_DIRECTION
     assert all(d.state_class is None for d in STATION_DESCRIPTIONS)
     assert by_key["uv"].device_class is None
@@ -376,7 +379,7 @@ def test_numeric_sensors_display_one_decimal() -> None:
     descriptions = (
         *ENTITY_DESCRIPTIONS,
         *STATION_DESCRIPTIONS,
-        STATION_DEW_POINT_DESCRIPTION,
+        *STATION_CALCULATED_DESCRIPTIONS,
         STATION_MEASUREMENT_TIME_DESCRIPTION,
     )
     for description in descriptions:
@@ -440,16 +443,26 @@ def test_station_sensor_unavailable_if_not_measured() -> None:
 
 @pytest.mark.asyncio
 async def test_setup_adds_station_sensors_only_with_station() -> None:
-    """The 12 station sensors are added only when a station is configured."""
+    """The station sensors are added only when a station is configured."""
     entry = Mock()
     entry.runtime_data.coordinator.config_entry.entry_id = "entry1"
     entry.runtime_data.station = _station_mock(None)
     add = Mock()
     await async_setup_entry(Mock(), entry, add)
     station_sensors = list(add.call_args_list[1][0][0])
-    # The 12 measurements, the dew point and the time of the newest reading
-    assert len(station_sensors) == len(SERIES_KEYS) + 2
-    assert isinstance(station_sensors[-2], IdokepStationDewPointSensor)
+    # 12 measurements, 6 calculated values and the time of the newest reading
+    assert len(station_sensors) == 12 + 6 + 1
+    assert [s.entity_description.key for s in station_sensors[12:18]] == [
+        "dew_point",
+        "apparent_temperature",
+        "wet_bulb_temperature",
+        "absolute_humidity",
+        "vapour_pressure_deficit",
+        "cloud_base",
+    ]
+    assert all(
+        isinstance(s, IdokepStationCalculatedSensor) for s in station_sensors[12:18]
+    )
     assert isinstance(station_sensors[-1], IdokepStationMeasurementTimeSensor)
 
     entry.runtime_data.station = None
@@ -564,57 +577,61 @@ def test_station_measurement_time_sensor() -> None:
     ).available
 
 
+def _calculated(key: str) -> object:
+    return next(d for d in STATION_CALCULATED_DESCRIPTIONS if d.key == key)
+
+
 @pytest.mark.parametrize(
-    ("temperature", "humidity", "expected"),
+    ("key", "device_class", "unit", "value"),
     [
-        (20.0, 50.0, 9.26),
-        (10.0, 100.0, 10.0),  # saturated: dew point = temperature
-        (-5.0, 80.0, -7.92),
-        (30.0, 70.0, 23.93),
-        (20.0, None, None),
-        (None, 50.0, None),
-        (20.0, 0.0, None),  # no water vapour: no dew point
+        ("dew_point", SensorDeviceClass.TEMPERATURE, "°C", 9.26),
+        ("apparent_temperature", SensorDeviceClass.TEMPERATURE, "°C", 16.35),
+        ("wet_bulb_temperature", SensorDeviceClass.TEMPERATURE, "°C", 13.7),
+        ("absolute_humidity", SensorDeviceClass.ABSOLUTE_HUMIDITY, "g/m³", 8.62),
+        ("vapour_pressure_deficit", SensorDeviceClass.PRESSURE, "kPa", 1.17),
+        ("cloud_base", SensorDeviceClass.DISTANCE, "m", 1342.36),
     ],
 )
-def test_dew_point(
-    temperature: float | None, humidity: float | None, expected: float | None
+def test_station_calculated_sensors(
+    key: str, device_class: SensorDeviceClass, unit: str, value: float
 ) -> None:
-    """Magnus formula, rounded to 2 decimals."""
-    assert dew_point(temperature, humidity) == expected
-
-
-def test_station_dew_point_sensor() -> None:
-    """Dew point from the merged temperature and humidity, naming both sources."""
+    """Calculated from the merged values (20 °C, 50%, 18 km/h)."""
     data = StationData(
-        values={"hom": 20.0, "rh": 50.0},
-        sources={"hom": ("jozsamet",), "rh": ("jozsamet", "olig13")},
-        available=frozenset({"hom", "rh"}),
+        values={"hom": 20.0, "rh": 50.0, "szelero": 18.0},
+        sources={
+            "hom": ("jozsamet",),
+            "rh": ("jozsamet", "olig13"),
+            "szelero": ("olig13",),
+        },
+        available=frozenset({"hom", "rh", "szelero"}),
         measured=NOW,
     )
-    sensor = IdokepStationDewPointSensor(
-        _station_mock(data), STATION_DEW_POINT_DESCRIPTION
-    )
+    sensor = IdokepStationCalculatedSensor(_station_mock(data), _calculated(key))
 
-    assert sensor.unique_id == "entry1_station_dew_point"
-    assert sensor.device_class == SensorDeviceClass.TEMPERATURE
-    assert sensor.native_unit_of_measurement == "°C"
+    assert sensor.unique_id == f"entry1_station_{key}"
+    assert sensor.device_class == device_class
+    assert sensor.native_unit_of_measurement == unit
     assert sensor.available
-    assert sensor.native_value == 9.26
+    assert sensor.native_value == value
     assert sensor.extra_state_attributes == {"stations": ["jozsamet", "olig13"]}
 
 
-def test_station_dew_point_sensor_needs_both_inputs() -> None:
-    """Unavailable without humidity; unknown without a fresh reading."""
-    no_humidity = StationData(values={"hom": 20.0}, available=frozenset({"hom"}))
-    assert not IdokepStationDewPointSensor(
-        _station_mock(no_humidity), STATION_DEW_POINT_DESCRIPTION
+def test_station_calculated_sensor_needs_every_input() -> None:
+    """Unavailable if an input isn't measured; unknown without a fresh reading."""
+    no_wind = StationData(
+        values={"hom": 20.0, "rh": 50.0}, available=frozenset({"hom", "rh"})
+    )
+    apparent = _calculated("apparent_temperature")
+    assert not IdokepStationCalculatedSensor(_station_mock(no_wind), apparent).available
+    assert IdokepStationCalculatedSensor(
+        _station_mock(no_wind), _calculated("dew_point")
     ).available
 
     stale = StationData(
         values={"hom": 20.0, "rh": None}, available=frozenset({"hom", "rh"})
     )
-    sensor = IdokepStationDewPointSensor(
-        _station_mock(stale), STATION_DEW_POINT_DESCRIPTION
+    sensor = IdokepStationCalculatedSensor(
+        _station_mock(stale), _calculated("dew_point")
     )
     assert sensor.available
     assert sensor.native_value is None

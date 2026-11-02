@@ -16,7 +16,7 @@ from homeassistant.const import UnitOfPrecipitationDepth, UnitOfSpeed
 from homeassistant.core import callback
 from homeassistant.helpers import sun
 
-from .const import ATTRIBUTION, DOMAIN, MANUFACTURER
+from .const import ATTRIBUTION, DOMAIN, LOCATION, MANUFACTURER
 from .coordinator import CURRENT, HOURLY
 from .entity import IdokepEntity, device_name, forecast_page_url
 
@@ -109,17 +109,20 @@ class IdokepWeatherEntity(IdokepEntity, WeatherEntity):
         return UnitOfPrecipitationDepth.MILLIMETERS
 
     @property
-    def extra_state_attributes(self) -> dict[str, float] | None:
+    def extra_state_attributes(self) -> dict[str, str | float]:
         """
-        Return the current hour's precipitation (mm).
+        Return the settlement and the current hour's precipitation (mm).
 
-        HA's weather entity has no attribute for it; the Precipitation
+        HA's weather entity has no attributes for them; the Precipitation
         sensor has the same value.
         """
+        attributes: dict[str, str | float] = {
+            "settlement": self.coordinator.config_entry.data[LOCATION]
+        }
         precipitation = self.coordinator.data.get("precipitation")
-        if precipitation is None:
-            return None
-        return {"precipitation": precipitation}
+        if precipitation is not None:
+            attributes["precipitation"] = precipitation
+        return attributes
 
     @callback
     def _handle_coordinator_update(self) -> None:

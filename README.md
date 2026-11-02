@@ -12,7 +12,7 @@ Az integráció az idokep.hu nyilvános oldalait olvassa (nincs hivatalos API, f
 - **Időjárás entitás** óránkénti és napi (kb. 23 napos) előrejelzéssel, a Home Assistant új forecast API-jával
 - **Előrejelzési szenzorok**: hőmérséklet, állapot, mai maximum/minimum, szélirány, szélerősség, becsült szélsebesség, csapadék, csapadék valószínűsége
 - **Riasztások**: vihar a következő órában, általános, sárga, narancs és piros riasztás
-- **Időjárás-állomások** (nem kötelező): egy vagy több idokep.hu automata 12 mért adata egy eszközben összevonva, a belőlük számított harmatpont és a mérés ideje
+- **Időjárás-állomások** (nem kötelező): egy vagy több idokep.hu automata 12 mért adata egy eszközben összevonva, belőlük számított értékek (harmatpont, hőérzet, nedves hőmérséklet, abszolút páratartalom, páranyomás-hiány, felhőalap) és a mérés ideje
 - **Országos radar**: animált GIF az utolsó 5 radarképből, külön szolgáltatásként
 - Magyar és angol fordítás, a Home Assistant nyelvének megfelelően
 - Csak a szükséges oldalakat tölti le, és a legutóbbi jó adatokat lemezre menti, így újraindítás után is azonnal van adat
@@ -25,7 +25,7 @@ Minden felvett bejegyzéshez (településhez) az alábbiak jönnek létre. A `<N
 
 | Entitás | Típus | Megjegyzés |
 |---|---|---|
-| `<Név> Forecast` | időjárás | aktuális állapot, hőmérséklet, szél, az aktuális óra csapadéka (`precipitation` attribútum, mm); óránkénti és napi előrejelzés |
+| `<Név> Forecast` | időjárás | aktuális állapot, hőmérséklet, szél, a település (`settlement` attribútum), az aktuális óra csapadéka (`precipitation` attribútum, mm); óránkénti és napi előrejelzés |
 | Hőmérséklet | szenzor (°C) | aktuális |
 | Állapot | szenzor (felsorolás) | pl. napos, borult, eső |
 | Mai maximum hőmérséklet | szenzor (°C) | a napi előrejelzésből, éjfélig megmarad |
@@ -47,28 +47,33 @@ Egy vagy több idokep.hu időjárás-állomás (automata) mért adatai, egy eszk
 - **Prioritás**: az első olyan állomás értéke a listában, amelynek van egy óránál frissebb mérése; a következő állomás pótolja, amit az előző nem mér, vagy ha épp nem érhető el.
 - **Átlag**: a friss mérések átlaga (a szélirány szögként átlagolva).
 
-Minden szenzor `stations` attribútuma mutatja, melyik állomás(ok)tól származik az érték. Azok az értékek, amelyeket egyik állomás sem mér, „nem elérhető” állapotúak; ha egyiknek sincs egy óránál frissebb mérése, „ismeretlen”. Ha egy állomás épp nem érhető el, a többi adatai jelennek meg.
+Minden szenzor `stations` attribútuma mutatja, melyik állomás(ok)tól származik az érték. Azok az értékek, amelyeket egyik állomás sem mér, „nem elérhető” állapotúak (a számított értékek akkor, ha valamelyik bemenetüket nem méri egyik állomás sem); ha egyiknek sincs egy óránál frissebb mérése, „ismeretlen”. Ha egy állomás épp nem érhető el, a többi adatai jelennek meg.
 
-| Entitás | Mértékegység |
-|---|---|
-| Hőmérséklet | °C |
-| Páratartalom | % |
-| Légnyomás | hPa |
-| 24 órás csapadék | mm |
-| Éjfél óta hullott csapadék | mm |
-| Csapadékintenzitás | mm/h |
-| Szélsebesség | km/h |
-| Széllökés | km/h |
-| Szélirány (fok) | ° |
-| UV-B index | – |
-| Globálsugárzás | W/m² |
-| Vízhőmérséklet | °C |
-| Harmatpont | °C (számított, a hőmérsékletből és a páratartalomból) |
-| Mérés ideje | időbélyeg |
+| Entitás | Mértékegység | Megjegyzés |
+|---|---|---|
+| Hőmérséklet | °C | mért |
+| Relatív páratartalom | % | mért |
+| Légnyomás | hPa | mért |
+| 24 órás csapadék | mm | mért |
+| Éjfél óta hullott csapadék | mm | mért |
+| Csapadékintenzitás | mm/h | mért |
+| Szélsebesség | km/h | mért |
+| Széllökés | km/h | mért |
+| Szélirány | ° | mért |
+| UV-B index | – | mért |
+| Globálsugárzás | W/m² | mért |
+| Vízhőmérséklet | °C | mért |
+| Harmatpont | °C | számított (Magnus-képlet) a hőmérsékletből és a relatív páratartalomból |
+| Hőérzet | °C | számított (Steadman-féle látszólagos hőmérséklet, napsugárzás nélkül) a hőmérsékletből, a relatív páratartalomból és a szélsebességből |
+| Nedves hőmérséklet | °C | számított (Stull-képlet) a hőmérsékletből és a relatív páratartalomból |
+| Abszolút páratartalom | g/m³ | számított: egy köbméter levegő víztartalma |
+| Páranyomás-hiány | kPa | számított: mennyire van távol a levegő a telítettségtől |
+| Felhőalap | m | számított **becslés** az állomás fölött (125 m a hőmérséklet és a harmatpont minden °C különbségére); gomolyfelhőkre érvényes |
+| Mérés ideje | időbélyeg | a legfrissebb felhasznált mérés ideje |
 
-### `National Radar Image` – Radar szolgáltatás
+### `Országos Radarkép` (National Radar Image) – Radar szolgáltatás
 
-Az első bejegyzés felvételekor automatikusan létrejön egy **Radar** bejegyzés egy kép entitással (**National radar image**). Ez az országos radar utolsó 5 képéből készült animált GIF (képenként 1 mp, az utolsón 2 mp). Ha törlöd, a következő újraindításkor vagy újratöltéskor újra létrejön; ha nem kell, inkább kapcsold ki.
+Az első bejegyzés felvételekor automatikusan létrejön egy **Radar** bejegyzés egy kép entitással (**Országos radarkép**, angolul National radar image). Ez az országos radar utolsó 5 képéből készült animált GIF (képenként 1 mp, az utolsón 2 mp). Ha törlöd, a következő újraindításkor vagy újratöltéskor újra létrejön; ha nem kell, inkább kapcsold ki.
 
 ## Telepítés
 

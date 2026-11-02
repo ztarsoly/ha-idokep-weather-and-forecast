@@ -44,7 +44,7 @@ def test_icon_keys_match_translation_keys(
         *(
             [
                 platform.STATION_MEASUREMENT_TIME_DESCRIPTION,
-                platform.STATION_DEW_POINT_DESCRIPTION,
+                *platform.STATION_CALCULATED_DESCRIPTIONS,
             ]
             if platform is sensor
             else []

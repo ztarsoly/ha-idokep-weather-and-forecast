@@ -27,6 +27,11 @@
             "already_configured": "Ez a bejegyzés már konfigurálva van."
         }
     },
+    "device": {
+        "national_radar": {
+            "name": "Országos Radarkép"
+        }
+    },
     "entity": {
         "sensor": {
             "temperature": {
@@ -111,7 +116,7 @@
                 "name": "Hőmérséklet"
             },
             "station_humidity": {
-                "name": "Páratartalom"
+                "name": "Relatív páratartalom"
             },
             "station_pressure": {
                 "name": "Légnyomás"
@@ -132,7 +137,7 @@
                 "name": "Széllökés"
             },
             "station_wind_bearing": {
-                "name": "Szélirány (fok)"
+                "name": "Szélirány"
             },
             "station_uv_index": {
                 "name": "UV-B index"
@@ -145,6 +150,21 @@
             },
             "station_dew_point": {
                 "name": "Harmatpont"
+            },
+            "station_apparent_temperature": {
+                "name": "Hőérzet"
+            },
+            "station_wet_bulb_temperature": {
+                "name": "Nedves hőmérséklet"
+            },
+            "station_absolute_humidity": {
+                "name": "Abszolút páratartalom"
+            },
+            "station_vapour_pressure_deficit": {
+                "name": "Páranyomás-hiány"
+            },
+            "station_cloud_base": {
+                "name": "Felhőalap"
             },
             "station_measurement_time": {
                 "name": "Mérés ideje"
@@ -165,6 +185,11 @@
             },
             "alert_red": {
                 "name": "Piros riasztás"
+            }
+        },
+        "image": {
+            "national_radar": {
+                "name": "Országos radarkép"
             }
         }
     },

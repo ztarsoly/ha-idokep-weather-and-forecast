@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from homeassistant.components.image import ImageEntity
 from homeassistant.core import callback
+from homeassistant.helpers import translation
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -18,9 +19,20 @@ if TYPE_CHECKING:
 
     from .data import RadarConfigEntry
 
-RADAR_DEVICE_NAME = "National Radar Image"
 RADAR_MODEL = "National radar image"
+# Device and entity names: translated ("device" and "entity.image" in the
+# translations), the entity's falls back to English
+RADAR_TRANSLATION_KEY = "national_radar"
 RADAR_ENTITY_NAME = "National radar image"
+
+
+def radar_entity_name(hass: HomeAssistant) -> str:
+    """Return the image's name in Home Assistant's language."""
+    translations = translation.async_get_cached_translations(
+        hass, hass.config.language, "entity", DOMAIN
+    )
+    key = f"component.{DOMAIN}.entity.image.{RADAR_TRANSLATION_KEY}.name"
+    return translations.get(key, RADAR_ENTITY_NAME)
 
 
 async def async_setup_entry(
@@ -36,11 +48,11 @@ class IdokepRadarImage(CoordinatorEntity[RadarCoordinator], ImageEntity):
     """Animated GIF of the national radar (last five frames)."""
 
     _attr_content_type = "image/gif"
-    # Named on its own ("National radar image"), not "<device> <entity>"
+    # Named on its own ("National radar image"), not "<device> <entity>", so
+    # HA doesn't translate the name itself (see radar_entity_name)
     _attr_has_entity_name = False
-    _attr_name = RADAR_ENTITY_NAME
     # Used for the icon in icons.json
-    _attr_translation_key = "national_radar"
+    _attr_translation_key = RADAR_TRANSLATION_KEY
 
     def __init__(self, hass: HomeAssistant, coordinator: RadarCoordinator) -> None:
         """Initialize the radar image."""
@@ -48,9 +60,10 @@ class IdokepRadarImage(CoordinatorEntity[RadarCoordinator], ImageEntity):
         ImageEntity.__init__(self, hass)
         entry = coordinator.config_entry
         self._attr_unique_id = f"{entry.entry_id}_national_radar"
+        self._attr_name = radar_entity_name(hass)
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
-            name=RADAR_DEVICE_NAME,
+            translation_key=RADAR_TRANSLATION_KEY,
             manufacturer=MANUFACTURER,
             model=RADAR_MODEL,
             entry_type=DeviceEntryType.SERVICE,
