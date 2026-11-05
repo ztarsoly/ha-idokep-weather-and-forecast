@@ -41,6 +41,7 @@ SENSOR_SOURCES = {
     "wind_speed": HOURLY,
     "precipitation": HOURLY,
     "precipitation_probability": HOURLY,
+    "alert_level": HOURLY,
     "humidity": HUMIDITY_MAP,
     "dew_point": HUMIDITY_MAP,
     "pressure": PRESSURE_MAP,

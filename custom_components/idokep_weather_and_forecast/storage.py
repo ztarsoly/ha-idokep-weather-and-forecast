@@ -108,6 +108,7 @@ def _restore_forecast(
             "wind_speed",
             "precipitation",
             "precipitation_probability",
+            "storm_expected",
         ):
             if key in data:
                 result[key] = data[key]

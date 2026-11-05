@@ -76,9 +76,10 @@ def test_binary_sensors_differ_between_on_and_off(icons: dict) -> None:
 
 
 def test_alert_levels_have_distinct_icons(icons: dict) -> None:
-    """Yellow, orange and red alerts are told apart by icon."""
-    on_icons = [
-        icons["binary_sensor"][f"alert_{level}"]["state"]["on"]
-        for level in ("yellow", "orange", "red")
+    """No alert, yellow, orange and red are told apart by icon."""
+    alert_level = icons["sensor"]["alert_level"]
+    level_icons = [
+        alert_level["default"],
+        *(alert_level["state"][level] for level in ("yellow", "orange", "red")),
     ]
-    assert len(set(on_icons)) == len(on_icons)
+    assert len(set(level_icons)) == len(level_icons)

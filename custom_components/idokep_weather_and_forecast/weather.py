@@ -157,8 +157,11 @@ class IdokepWeatherEntity(IdokepEntity, WeatherEntity):
         )
 
     async def async_forecast_hourly(self) -> list[Forecast]:
-        """Return the hourly forecast."""
-        return self.coordinator.data.get("hourly_forecast", [])
+        """Return the hourly forecast (without the internal storm mark)."""
+        return [
+            {key: value for key, value in item.items() if key != "storm"}
+            for item in self.coordinator.data.get("hourly_forecast", [])
+        ]
 
     async def async_forecast_daily(self) -> list[Forecast]:
         """Return the daily forecast."""

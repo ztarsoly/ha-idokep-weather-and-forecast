@@ -88,6 +88,14 @@
       },
       "precipitation_probability": {
         "default": "mdi:umbrella-outline"
+      },
+      "alert_level": {
+        "default": "mdi:shield-check-outline",
+        "state": {
+          "yellow": "mdi:alert-outline",
+          "orange": "mdi:alert",
+          "red": "mdi:alert-octagon"
+        }
       }
     },
     "binary_sensor": {
@@ -95,30 +103,6 @@
         "default": "mdi:weather-partly-cloudy",
         "state": {
           "on": "mdi:weather-lightning"
-        }
-      },
-      "weather_alert": {
-        "default": "mdi:shield-check-outline",
-        "state": {
-          "on": "mdi:alert"
-        }
-      },
-      "alert_yellow": {
-        "default": "mdi:shield-check-outline",
-        "state": {
-          "on": "mdi:alert-outline"
-        }
-      },
-      "alert_orange": {
-        "default": "mdi:shield-check-outline",
-        "state": {
-          "on": "mdi:alert"
-        }
-      },
-      "alert_red": {
-        "default": "mdi:shield-check-outline",
-        "state": {
-          "on": "mdi:alert-octagon"
         }
       }
     },

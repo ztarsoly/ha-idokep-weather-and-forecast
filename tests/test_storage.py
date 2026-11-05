@@ -197,3 +197,12 @@ def test_restore_station_maps_only_if_fresh(source: str, data: dict) -> None:
     old = {"fetched": (NOW - timedelta(minutes=90)).isoformat(), "data": data}
     assert restore(source, fresh, NOW) == data
     assert restore(source, old, NOW) == {}
+
+
+def test_restore_storm_value_only_if_fresh() -> None:
+    """The storm value is kept for an hour, like the current wind."""
+    data = {"storm_expected": True}
+    fresh = {"fetched": (NOW - timedelta(minutes=30)).isoformat(), "data": data}
+    old = {"fetched": (NOW - timedelta(minutes=90)).isoformat(), "data": data}
+    assert restore(HOURLY, fresh, NOW)["storm_expected"] is True
+    assert "storm_expected" not in restore(HOURLY, old, NOW)

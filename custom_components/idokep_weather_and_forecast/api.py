@@ -128,6 +128,13 @@ class WeatherConditionMapper:
         return sorted(set(cls._CONDITION_MAPPING.values()))
 
 
+# Condition texts of a storm: those mapped to a lightning condition, and two
+# with storm in their name that map to other conditions
+STORM_TEXTS = frozenset(
+    {"száraz zivatar", "villámlás", "zivatar", "eső viharos széllel", "porvihar"}
+)
+
+
 class WindStrengthMapper:
     """
     Maps idokep.hu wind strength words to Beaufort-scale levels.
@@ -302,6 +309,10 @@ class CurrentWeatherParser(WeatherParser):
 class AlertParser(WeatherParser):
     """Parser for weather alerts."""
 
+    # Every hourly card has one alert block (empty without an alert), so this
+    # many blocks from the first card cover the next 24 hours
+    HOURS = 24
+
     # Mapping of Hungarian alert types to English names
     ALERT_TYPE_MAP: ClassVar[dict[str, str]] = {
         "ónos eső": "freezing_rain",
@@ -383,8 +394,9 @@ class AlertParser(WeatherParser):
         alerts = []
         seen_alerts = set()  # To avoid duplicates
 
-        # Find all hourly alert containers
-        alert_containers = soup.find_all("div", class_="genericHourlyAlert")
+        alert_containers = soup.find_all(
+            "div", class_="genericHourlyAlert", limit=self.HOURS
+        )
 
         for container in alert_containers:
             if not isinstance(container, Tag):
@@ -531,6 +543,7 @@ class HourlyForecastParser(WeatherParser):
             forecast = self._with_current_hour(forecast, now)
             self._last_forecast = forecast
             result["hourly_forecast"] = forecast
+            result["storm_expected"] = self._storm_expected(forecast, now)
             current = self._current_hour_item(forecast, now)
             # The current hour's wind and precipitation probability also
             # serve as "current" values
@@ -568,6 +581,16 @@ class HourlyForecastParser(WeatherParser):
             if start <= now < start + dt.timedelta(hours=1):
                 return [item, *forecast]
         return forecast
+
+    @staticmethod
+    def _storm_expected(forecast: list[dict[str, Any]], now: dt.datetime) -> bool:
+        """Return True if the current or the next hour is stormy."""
+        hour = now.replace(minute=0, second=0, microsecond=0)
+        end = hour + dt.timedelta(hours=2)
+        return any(
+            item.get("storm") and hour <= dt.datetime.fromisoformat(item["datetime"]) < end
+            for item in forecast
+        )
 
     @staticmethod
     def _current_hour_item(
@@ -621,7 +644,9 @@ class HourlyForecastParser(WeatherParser):
             )
 
             strength = self.extract_wind_strength(card)
+            storm = {"storm": True} if self._is_stormy(card) else {}
             return {
+                **storm,
                 "datetime": slot_start.isoformat(),
                 "temperature": temp,
                 "condition": condition,
@@ -682,20 +707,26 @@ class HourlyForecastParser(WeatherParser):
         LOGGER.debug("Unknown wind strength: classes %s, tooltip %r", classes, tooltip)
         return None
 
+    @staticmethod
+    def _condition_text(card: Tag) -> str | None:
+        """Return the condition's Hungarian text from the icon container tag."""
+        icon_container = card.find("div", class_="forecast-icon-container")
+        if isinstance(icon_container, Tag):
+            icon_a = icon_container.find("a")
+            if isinstance(icon_a, Tag):
+                condition = icon_a.get("data-bs-content")
+                if isinstance(condition, str):
+                    return condition
+        return None
+
     def extract_condition(self, card: Tag) -> str | None:
         """Extract weather condition from the icon container tag."""
-        icon_container_elem = card.find("div", class_="forecast-icon-container")
-        icon_container = (
-            icon_container_elem if isinstance(icon_container_elem, Tag) else None
-        )
-        condition = None
-        if icon_container and isinstance(icon_container, Tag):
-            icon_a = icon_container.find("a")
-            if icon_a and isinstance(icon_a, Tag):
-                condition_val = icon_a.get("data-bs-content")
-                if isinstance(condition_val, str):
-                    condition = WeatherConditionMapper.map_condition(condition_val)
-        return condition
+        text = self._condition_text(card)
+        return None if text is None else WeatherConditionMapper.map_condition(text)
+
+    def _is_stormy(self, card: Tag) -> bool:
+        """Return True if the card's condition is a storm."""
+        return (self._condition_text(card) or "").lower() in STORM_TEXTS
 
     def extract_precipitation_probability(self, card: Tag) -> int:
         """Extract precipitation probability."""

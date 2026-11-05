@@ -114,6 +114,15 @@
             "precipitation_probability": {
                 "name": "Precipitation probability"
             },
+            "alert_level": {
+                "name": "Alert level in 24 hours",
+                "state": {
+                    "none": "No alert",
+                    "yellow": "Yellow",
+                    "orange": "Orange",
+                    "red": "Red"
+                }
+            },
             "humidity": {
                 "name": "Humidity"
             },
@@ -189,19 +198,7 @@
         },
         "binary_sensor": {
             "storm_expected_1h": {
-                "name": "Storm Expected in Next Hour"
-            },
-            "weather_alert": {
-                "name": "Alert"
-            },
-            "alert_yellow": {
-                "name": "Yellow Alert"
-            },
-            "alert_orange": {
-                "name": "Orange Alert"
-            },
-            "alert_red": {
-                "name": "Red Alert"
+                "name": "Storm expected in an hour"
             }
         },
         "image": {

@@ -114,6 +114,15 @@
             "precipitation_probability": {
                 "name": "Csapadék valószínűsége"
             },
+            "alert_level": {
+                "name": "Riasztási szint 24 órán belül",
+                "state": {
+                    "none": "Nincs riasztás",
+                    "yellow": "Sárga",
+                    "orange": "Narancs",
+                    "red": "Piros"
+                }
+            },
             "humidity": {
                 "name": "Páratartalom"
             },
@@ -189,19 +198,7 @@
         },
         "binary_sensor": {
             "storm_expected_1h": {
-                "name": "Vihar várható az elkövetkező órában"
-            },
-            "weather_alert": {
-                "name": "Riasztás"
-            },
-            "alert_yellow": {
-                "name": "Sárga riasztás"
-            },
-            "alert_orange": {
-                "name": "Narancs riasztás"
-            },
-            "alert_red": {
-                "name": "Piros riasztás"
+                "name": "Vihar várható egy órán belül"
             }
         },
         "image": {

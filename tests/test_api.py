@@ -2152,3 +2152,91 @@ async def test_client_reads_the_uv_map(location: str, uv_index: float | None) ->
 
     get_html.assert_awaited_once_with("https://www.idokep.hu/uv")
     assert result == {"uv_index": uv_index}
+
+
+# ---- the storm's hours and the alerts' 24 hours -----------------------------------
+
+
+def _hourly_page(conditions: dict[str, str]) -> BeautifulSoup:
+    """Return a forecast page with an hourly card per "hour": condition text."""
+    cards = "".join(
+        f'''<div class="ik wide-hourly-forecast-card">
+            <div class="ik wide-hourly-forecast-hour">{hour}</div>
+            <div class="forecast-icon-container"><a data-bs-content="{text}"></a></div>
+            <div class="ik tempValue"><a>5</a></div>
+        </div>'''
+        for hour, text in conditions.items()
+    )
+    return BeautifulSoup(cards, "html.parser")
+
+
+def _parse_hourly_at(soup: BeautifulSoup, *when: int) -> dict:
+    """Parse the hourly cards as if it were the given time."""
+    now = dt.datetime(*when, tzinfo=zoneinfo.ZoneInfo("Europe/Budapest"))
+
+    class Clock(dt.datetime):
+        """The real datetime class, stopped at the given time."""
+
+        @classmethod
+        def now(cls, tz: dt.tzinfo | None = None) -> dt.datetime:
+            return now.astimezone(tz)
+
+    with patch("custom_components.idokep_weather_and_forecast.api.dt.datetime", Clock):
+        return HourlyForecastParser().parse(soup)
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["Zivatar", "Száraz zivatar", "Villámlás", "Eső viharos széllel", "Porvihar"],
+)
+@pytest.mark.parametrize(
+    ("hours", "expected"),
+    [
+        (("14:00", "15:00", "16:00"), True),  # the current hour
+        (("15:00", "16:00", "17:00"), True),  # the next hour
+        (("16:00", "17:00", "18:00"), False),  # later
+    ],
+)
+def test_storm_expected_in_the_current_or_next_hour(
+    text: str, hours: tuple[str, ...], expected: bool
+) -> None:
+    """Each storm condition counts, in the current or next hour only."""
+    conditions = dict.fromkeys(("14:00", "15:00", "16:00", "17:00"), "Napos")
+    conditions[hours[0]] = text
+    result = _parse_hourly_at(_hourly_page(conditions), 2026, 11, 6, 14, 30)
+    assert result["storm_expected"] is expected
+
+
+def test_no_storm_without_storm_conditions() -> None:
+    """Rain alone isn't a storm."""
+    page = _hourly_page({"14:00": "Eső", "15:00": "Erős eső"})
+    assert _parse_hourly_at(page, 2026, 11, 6, 14, 30)["storm_expected"] is False
+
+
+def test_storm_mark_is_only_on_stormy_hours() -> None:
+    """The internal mark is set only where the condition is a storm."""
+    page = _hourly_page({"14:00": "Porvihar", "15:00": "Napos"})
+    forecast = _parse_hourly_at(page, 2026, 11, 6, 14, 30)["hourly_forecast"]
+    assert forecast[0]["storm"] is True
+    assert "storm" not in forecast[1]
+
+
+def _alert_cards(alert_hour: int, count: int = 36) -> BeautifulSoup:
+    """Return hourly alert blocks like the page's, with an alert in one of them."""
+    alert = (
+        '<a class="hover-over" data-bs-content="Piros riasztás szél miatt"></a>'
+    )
+    blocks = "".join(
+        f'<div class="ik genericHourlyAlert">{alert if i == alert_hour else ""}</div>'
+        for i in range(count)
+    )
+    return BeautifulSoup(blocks, "html.parser")
+
+
+@pytest.mark.parametrize(
+    ("alert_hour", "counted"), [(0, True), (23, True), (24, False), (35, False)]
+)
+def test_alerts_of_the_first_24_cards_count(alert_hour: int, counted: bool) -> None:
+    """An alert on a card after the first 24 is left out."""
+    result = AlertParser().parse(_alert_cards(alert_hour))
+    assert bool(result["alerts_by_level"]["red"]) is counted

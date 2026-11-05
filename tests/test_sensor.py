@@ -38,7 +38,7 @@ class TestIdokepSensorEntityDescriptions:
 
     def test_entity_descriptions_count(self) -> None:
         """Test that we have the expected number of entity descriptions."""
-        assert len(ENTITY_DESCRIPTIONS) == 14
+        assert len(ENTITY_DESCRIPTIONS) == 15
 
     def test_entity_descriptions_keys(self) -> None:
         """Test that entity descriptions have the expected keys."""
@@ -57,6 +57,7 @@ class TestIdokepSensorEntityDescriptions:
             "dew_point",
             "pressure",
             "uv_index",
+            "alert_level",
         }
         actual_keys = {desc.key for desc in ENTITY_DESCRIPTIONS}
         assert actual_keys == expected_keys
@@ -79,6 +80,31 @@ class TestIdokepSensorEntityDescriptions:
         assert desc.native_unit_of_measurement == unit
         assert desc.suggested_display_precision == 1
         assert desc.state_class is None
+
+    @pytest.mark.parametrize(
+        ("alerts_by_level", "expected"),
+        [
+            (None, None),  # the forecast page isn't read yet: unknown
+            ({}, "none"),
+            ({"yellow": [], "orange": [], "red": []}, "none"),
+            ({"yellow": [{"type": "fog"}], "orange": [], "red": []}, "yellow"),
+            ({"yellow": [{"type": "fog"}], "orange": [{"type": "wind"}]}, "orange"),
+            ({"yellow": [{}], "orange": [{}], "red": [{}]}, "red"),
+        ],
+    )
+    def test_alert_level_is_the_highest(
+        self, mock_coordinator: Mock, alerts_by_level: dict | None, expected: str | None
+    ) -> None:
+        """The state is the highest level among the alerts; it has no attributes."""
+        desc = next(d for d in ENTITY_DESCRIPTIONS if d.key == "alert_level")
+        assert desc.device_class == SensorDeviceClass.ENUM
+        assert desc.options == ["none", "yellow", "orange", "red"]
+        mock_coordinator.data = (
+            {} if alerts_by_level is None else {"alerts_by_level": alerts_by_level}
+        )
+        sensor = IdokepSensor(mock_coordinator, desc)
+        assert sensor.native_value == expected
+        assert sensor.extra_state_attributes is None
 
     @pytest.mark.parametrize("key", ["humidity", "dew_point", "pressure", "uv_index"])
     def test_map_sensor_unavailable_without_value(

@@ -18,6 +18,17 @@ from custom_components.idokep_weather_and_forecast import (
 from custom_components.idokep_weather_and_forecast.const import DOMAIN
 
 
+@pytest.fixture(autouse=True)
+def entity_registry() -> Mock:
+    """Patch the entity registry (no old alert sensor left by default)."""
+    with patch(
+        "custom_components.idokep_weather_and_forecast.er.async_get"
+    ) as mock_er_get:
+        registry = mock_er_get.return_value
+        registry.async_get_entity_id.return_value = None
+        yield registry
+
+
 class TestIdokepInit:
     """Test cases for Időkép integration initialization."""
 
@@ -158,6 +169,40 @@ class TestIdokepInit:
         # A failed station fetch must not fail the entry: no first refresh
         station.async_refresh.assert_awaited_once()
         mock_track_time.assert_any_call(mock_hass, station.async_tick, second=59)
+
+    @pytest.mark.asyncio
+    async def test_async_setup_entry_deletes_old_alert_sensors(
+        self, entity_registry: Mock
+    ) -> None:
+        """The binary sensors replaced by Alert level are deleted on upgrade."""
+        mock_hass, mock_entry = self._location_entry({"station": ""})
+        entity_registry.async_get_entity_id.side_effect = lambda _p, _d, unique_id: (
+            f"binary_sensor.{unique_id}" if "alert" in unique_id else None
+        )
+
+        with (
+            patch(
+                "custom_components.idokep_weather_and_forecast.IdokepDataUpdateCoordinator",
+                return_value=AsyncMock(),
+            ),
+            patch(
+                "custom_components.idokep_weather_and_forecast.async_get_clientsession"
+            ),
+            patch("custom_components.idokep_weather_and_forecast.IdokepApiClient"),
+            patch(
+                "custom_components.idokep_weather_and_forecast.async_track_time_change"
+            ),
+            patch("custom_components.idokep_weather_and_forecast.dr.async_get"),
+        ):
+            assert await async_setup_entry(mock_hass, mock_entry)
+
+        removed = {c.args[0] for c in entity_registry.async_remove.call_args_list}
+        assert removed == {
+            "binary_sensor.entry1_weather_alert",
+            "binary_sensor.entry1_alert_yellow",
+            "binary_sensor.entry1_alert_orange",
+            "binary_sensor.entry1_alert_red",
+        }
 
     @pytest.mark.asyncio
     async def test_async_setup_entry_station_removed_in_options(self) -> None:

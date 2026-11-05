@@ -11,7 +11,7 @@ Az integráció az idokep.hu nyilvános oldalait olvassa (nincs hivatalos API, f
 
 - **Időjárás entitás** óránkénti és napi (kb. 23 napos) előrejelzéssel, a Home Assistant új forecast API-jával
 - **Előrejelzési szenzorok**: hőmérséklet, állapot, mai maximum/minimum, szélirány, szélerősség, becsült szélsebesség, csapadék, csapadék valószínűsége, valamint a település állomásainak átlagából páratartalom, harmatpont, légnyomás és UV-index
-- **Riasztások**: vihar a következő órában, általános, sárga, narancs és piros riasztás
+- **Riasztások**: riasztási szint 24 órán belül (nincs, sárga, narancs, piros) és vihar egy órán belül
 - **Időjárás-állomások** (nem kötelező): egy vagy több idokep.hu automata 12 mért adata egy eszközben összevonva, belőlük számított értékek (harmatpont, hőérzet, nedves hőmérséklet, abszolút páratartalom, páranyomás, páranyomás-hiány, felhőalap) és a mérés ideje
 - **Országos radar**: animált GIF az utolsó 5 radarképből, külön szolgáltatásként
 - Magyar és angol fordítás, a Home Assistant nyelvének megfelelően
@@ -40,9 +40,8 @@ Minden felvett bejegyzéshez (településhez) az alábbiak jönnek létre. A `<N
 | Harmatpont | szenzor (°C) | a település állomásainak átlaga a harmatpont-térképről (`/para`) |
 | Légnyomás | szenzor (hPa) | a település állomásainak átlaga a légnyomástérképről (`/legnyomas`), tengerszintre átszámítva |
 | UV-B index | szenzor | a település állomásainak átlaga az UV-térképről (`/uv`); kevés állomás méri |
-| Vihar várható az elkövetkező órában | bináris szenzor | |
-| Riasztás | bináris szenzor | bármilyen riasztás |
-| Sárga / Narancs / Piros riasztás | bináris szenzor | szintenként |
+| Riasztási szint 24 órán belül | szenzor (felsorolás) | a legmagasabb szint az oldal figyelmeztető sávjából és az első 24 órás kártya riasztásaiból: Nincs riasztás, Sárga, Narancs, Piros |
+| Vihar várható egy órán belül | bináris szenzor | bekapcsol, ha az aktuális vagy a következő óra viharos (zivatar, száraz zivatar, villámlás, eső viharos széllel, porvihar); az oldal óránkénti letöltésekor frissül |
 
 A páratartalom, a harmatpont, a légnyomás és az UV-B index „nem elérhető”, ha a településnek nincs ilyen értéket mérő állomása.
 

@@ -64,12 +64,25 @@ COMPASS_POINTS = [
 ]
 
 
+# Alert levels, lowest first; "none" is shown as "No alert"
+ALERT_NONE = "none"
+ALERT_LEVELS = [ALERT_NONE, "yellow", "orange", "red"]
 # Sensors read from the station maps: unavailable if the settlement has no value
 MAP_SENSOR_KEYS = frozenset(
     key
     for source in (HUMIDITY_MAP, PRESSURE_MAP, UV_MAP)
     for key in SOURCE_ENTITIES[source]
 )
+
+
+def highest_alert_level(alerts_by_level: dict[str, list] | None) -> str | None:
+    """Return the highest level with an alert (None if the page isn't read yet)."""
+    if alerts_by_level is None:
+        return None
+    return next(
+        (level for level in reversed(ALERT_LEVELS) if alerts_by_level.get(level)),
+        ALERT_NONE,
+    )
 
 
 def bearing_to_compass(bearing: float | None) -> str | None:
@@ -154,6 +167,13 @@ ENTITY_DESCRIPTIONS = (
         translation_key="precipitation_probability",
         native_unit_of_measurement=PERCENTAGE,
         suggested_display_precision=DISPLAY_PRECISION,
+    ),
+    # The highest level among the alerts on the forecast page
+    SensorEntityDescription(
+        key="alert_level",
+        translation_key="alert_level",
+        device_class=SensorDeviceClass.ENUM,
+        options=ALERT_LEVELS,
     ),
     # Average of the settlement's stations on idokep.hu's maps
     SensorEntityDescription(
@@ -436,6 +456,8 @@ class IdokepSensor(IdokepEntity, SensorEntity):
         """Return the native value of the sensor."""
         if self.entity_description.key == "wind_direction":
             return bearing_to_compass(self.coordinator.data.get("wind_bearing"))
+        if self.entity_description.key == "alert_level":
+            return highest_alert_level(self.coordinator.data.get("alerts_by_level"))
         value = self.coordinator.data.get(self.entity_description.key)
         options = self.entity_description.options
         if options is not None and value not in options:

@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from homeassistant.config_entries import SOURCE_IMPORT
 from homeassistant.const import Platform
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.storage import Store
@@ -75,6 +76,16 @@ def _remove_station_device(hass: HomeAssistant, entry: IdokepConfigEntry) -> Non
         registry.async_update_device(device.id, remove_config_entry_id=entry.entry_id)
 
 
+def _remove_old_alert_sensors(hass: HomeAssistant, entry: IdokepConfigEntry) -> None:
+    """Delete the alert binary sensors that the Alert level sensor replaced."""
+    registry = er.async_get(hass)
+    for key in ("weather_alert", "alert_yellow", "alert_orange", "alert_red"):
+        if entity_id := registry.async_get_entity_id(
+            Platform.BINARY_SENSOR, DOMAIN, f"{entry.entry_id}_{key}"
+        ):
+            registry.async_remove(entity_id)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: IdokepConfigEntry,
@@ -123,6 +134,7 @@ async def async_setup_entry(
         await station.async_refresh()
     else:
         _remove_station_device(hass, entry)
+    _remove_old_alert_sensors(hass, entry)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     # Check the per-page schedules at every whole minute (hh:mm:00)
