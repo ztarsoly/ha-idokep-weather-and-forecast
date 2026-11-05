@@ -35,11 +35,16 @@ from .api import (
     IdokepApiClientError,
 )
 from .const import (
+    DEFAULT_MAX_AGE,
     DOMAIN,
+    MAX_AGE,
+    MAX_MAX_AGE,
     MERGE_AVERAGE,
     MERGE_METHOD,
     MERGE_METHODS,
+    MERGE_NEWEST,
     MERGE_PRIORITY,
+    MIN_MAX_AGE,
     STATION,
 )
 
@@ -56,8 +61,6 @@ TIMEOUT = 10
 # Regular fetch on every 5th minute at second 59 (x:00:59, x:05:59, ...);
 # after a failure, again every minute until it succeeds
 CHECK_EVERY_MINUTES = 5
-# A measurement older than this is reported as unknown
-MAX_AGE = timedelta(hours=1)
 
 # Series in the order the file numbers them (the site's chart definitions)
 SERIES_KEYS = (
@@ -111,6 +114,14 @@ def merge_method(entry: ConfigEntry) -> str:
     return method if method in MERGE_METHODS else MERGE_PRIORITY
 
 
+def max_age_minutes(entry: ConfigEntry) -> int:
+    """Return the entry's reading age limit in minutes (options win over data)."""
+    minutes = entry.options.get(MAX_AGE, entry.data.get(MAX_AGE))
+    if isinstance(minutes, int | float) and MIN_MAX_AGE <= minutes <= MAX_MAX_AGE:
+        return int(minutes)
+    return DEFAULT_MAX_AGE
+
+
 def station_identifier(entry: ConfigEntry) -> tuple[str, str]:
     """Return the station device's identifier (stays when the code changes)."""
     return (DOMAIN, f"{entry.entry_id}_station")
@@ -143,7 +154,7 @@ class StationReadings:
     """A station's fresh readings."""
 
     code: str
-    # Series key -> newest reading within MAX_AGE
+    # Series key -> newest reading within the age limit
     readings: dict[str, Reading]
     # Series keys the station reports at all
     available: frozenset[str]
@@ -254,10 +265,13 @@ def decode_station(raw: bytes) -> StationSeries:
 
 
 def latest_readings(
-    decoded: StationSeries, code: str, now: datetime
+    decoded: StationSeries,
+    code: str,
+    now: datetime,
+    max_age: int = DEFAULT_MAX_AGE,
 ) -> StationReadings:
-    """Return each series' newest reading, if not older than MAX_AGE."""
-    oldest = (now - MAX_AGE).timestamp()
+    """Return each series' newest reading, if not older than max_age minutes."""
+    oldest = (now - timedelta(minutes=max_age)).timestamp()
     readings: dict[str, Reading] = {}
     available = set()
     for key, series in decoded.series.items():
@@ -292,7 +306,8 @@ def merge_readings(stations: list[StationReadings], method: str) -> StationData:
     Merge the stations' readings into one value per series.
 
     stations are in priority order. priority: the first station with a fresh
-    reading; average: the mean of all fresh readings.
+    reading; newest: the station with the most recent fresh reading (on a tie
+    the first listed); average: the mean of all fresh readings.
     """
     available = frozenset().union(*(station.available for station in stations))
     values: dict[str, float | None] = {}
@@ -307,7 +322,10 @@ def merge_readings(stations: list[StationReadings], method: str) -> StationData:
             chosen = candidates
             values[key] = _average(key, chosen)
         else:
-            chosen = candidates[:1]
+            if method == MERGE_NEWEST:
+                chosen = [max(candidates, key=lambda reading: reading.time)]
+            else:
+                chosen = candidates[:1]
             values[key] = round(chosen[0].value, DECIMALS)
         sources[key] = tuple(reading.code for reading in chosen)
         used.extend(chosen)
@@ -352,6 +370,7 @@ class StationCoordinator(DataUpdateCoordinator[StationData]):
         session: aiohttp.ClientSession,
         codes: list[str],
         method: str = MERGE_PRIORITY,
+        max_age: int = DEFAULT_MAX_AGE,
     ) -> None:
         """Initialize the coordinator."""
         super().__init__(
@@ -364,6 +383,7 @@ class StationCoordinator(DataUpdateCoordinator[StationData]):
         self._session = session
         self.codes = codes
         self.method = method
+        self.max_age = max_age
 
     async def async_tick(self, now: datetime) -> None:
         """
@@ -400,7 +420,7 @@ class StationCoordinator(DataUpdateCoordinator[StationData]):
             elif isinstance(result, BaseException):
                 raise result
             else:
-                stations.append(latest_readings(result, code, now))
+                stations.append(latest_readings(result, code, now, self.max_age))
         if not stations:
             raise UpdateFailed(errors[0])
         return merge_readings(stations, self.method)

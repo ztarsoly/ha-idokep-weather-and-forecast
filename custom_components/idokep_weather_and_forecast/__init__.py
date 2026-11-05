@@ -23,6 +23,7 @@ from .data import IdokepData, RadarData
 from .radar import RadarCoordinator
 from .station import (
     StationCoordinator,
+    max_age_minutes,
     merge_method,
     station_codes,
     station_identifier,
@@ -113,6 +114,7 @@ async def async_setup_entry(
             session=async_get_clientsession(hass),
             codes=codes,
             method=merge_method(entry),
+            max_age=max_age_minutes(entry),
         )
         entry.runtime_data.station = station
         # Not a first refresh: an unreachable station must not stop the

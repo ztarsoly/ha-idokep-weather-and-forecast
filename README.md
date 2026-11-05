@@ -44,14 +44,17 @@ Minden felvett bejegyzéshez (településhez) az alábbiak jönnek létre. A `<N
 | Riasztás | bináris szenzor | bármilyen riasztás |
 | Sárga / Narancs / Piros riasztás | bináris szenzor | szintenként |
 
+A páratartalom, a harmatpont, a légnyomás és az UV-B index „nem elérhető”, ha a településnek nincs ilyen értéket mérő állomása.
+
 ### `<Név> Weather` – Current weather (csak állomáskóddal)
 
 Egy vagy több idokep.hu időjárás-állomás (automata) mért adatai, egy eszközben. Több állomásnál minden érték a választott **összevonás módja** szerint áll össze:
 
-- **Prioritás**: az első olyan állomás értéke a listában, amelynek van egy óránál frissebb mérése; a következő állomás pótolja, amit az előző nem mér, vagy ha épp nem érhető el.
+- **Prioritás**: az első olyan állomás értéke a listában, amelynek van elég friss mérése; a következő állomás pótolja, amit az előző nem mér, vagy ha épp nem érhető el.
+- **Legfrissebb**: annak az állomásnak az értéke, amelynek a legutolsó az elég friss mérése (egyenlőségnél a listában előbbié).
 - **Átlag**: a friss mérések átlaga (a szélirány szögként átlagolva).
 
-Minden szenzor `stations` attribútuma mutatja, melyik állomás(ok)tól származik az érték. Azok az értékek, amelyeket egyik állomás sem mér, „nem elérhető” állapotúak (a számított értékek akkor, ha valamelyik bemenetüket nem méri egyik állomás sem); ha egyiknek sincs egy óránál frissebb mérése, „ismeretlen”. Ha egy állomás épp nem érhető el, a többi adatai jelennek meg.
+Minden szenzor `stations` attribútuma mutatja, melyik állomás(ok)tól származik az érték. Azok az értékek, amelyeket egyik állomás sem mér, „nem elérhető” állapotúak (a számított értékek akkor, ha valamelyik bemenetüket nem méri egyik állomás sem); ha egyiknek sincs a **Mérés maximális kora** beállításnál (alapból 60 perc) frissebb mérése, „ismeretlen”. Ha egy állomás épp nem érhető el, a többi adatai jelennek meg.
 
 | Entitás | Mértékegység | Megjegyzés |
 |---|---|---|
@@ -103,7 +106,8 @@ Az első bejegyzés felvételekor automatikusan létrejön egy **Radar** bejegyz
 | Név | igen | A bejegyzés és az eszközök neve (pl. Otthon → „Otthon Forecast”, „Otthon Weather”) |
 | Település | igen | A település neve úgy, ahogy az idokep.hu címében szerepel, pl. `Budapest` vagy `Debrecen-Józsa` (`https://www.idokep.hu/idojaras/Debrecen-Józsa`) |
 | Időjárás-állomások kódjai | nem | Egy vagy több idokep.hu automata kódja fontossági sorrendben, pl. `jozsamet` (`https://www.idokep.hu/automata/jozsamet`) |
-| Összevonás módja | nem | Prioritás (alapértelmezett) vagy Átlag – lásd fent |
+| Összevonás módja | nem | Prioritás (alapértelmezett), Legfrissebb vagy Átlag – lásd fent |
+| Mérés maximális kora | nem | Az ennél régebbi állomásmérés nem számít, percben (1–1440, alapból 60) |
 
 Az állomáskódot az [idokep.hu/automata](https://www.idokep.hu/automata) oldalon találod: válaszd ki az állomást a listából, a kód a címben a `/automata/` utáni rész (a listában zárójelben is látszik).
 
@@ -115,7 +119,8 @@ A bejegyzés **Beállítás** (Configure) gombjával módosítható:
 
 - **Település**: más településre vált; a bejegyzés és az eszközök neve, valamint az entitások azonosítói megmaradnak.
 - **Időjárás-állomások kódjai**: állomások hozzáadása, törlése vagy sorrendjük módosítása; mind törölve a `<Név> Weather` eszköz megszűnik.
-- **Összevonás módja**: Prioritás vagy Átlag.
+- **Összevonás módja**: Prioritás, Legfrissebb vagy Átlag.
+- **Mérés maximális kora**: az ennél régebbi állomásmérés nem számít, percben.
 
 A bejegyzés nevét a Home Assistant saját **Átnevezés** funkciójával lehet módosítani.
 

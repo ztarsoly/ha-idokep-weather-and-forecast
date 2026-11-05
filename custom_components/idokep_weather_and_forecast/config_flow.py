@@ -14,13 +14,17 @@ from slugify import slugify
 
 from .api import IdokepApiClient, IdokepApiClientError
 from .const import (
+    DEFAULT_MAX_AGE,
     DOMAIN,
     ENTRY_TYPE,
     LOCATION,
     LOGGER,
+    MAX_AGE,
+    MAX_MAX_AGE,
     MERGE_METHOD,
     MERGE_METHODS,
     MERGE_PRIORITY,
+    MIN_MAX_AGE,
     RADAR,
     RADAR_TITLE,
     RADAR_UNIQUE_ID,
@@ -29,6 +33,7 @@ from .const import (
 from .station import (
     StationDataError,
     fetch_station,
+    max_age_minutes,
     merge_method,
     parse_codes,
     station_codes,
@@ -71,8 +76,10 @@ def _location_field(default: str | None) -> dict[vol.Required, Any]:
     }
 
 
-def _station_fields(codes: list[str], method: str) -> dict[vol.Optional, Any]:
-    """Return the optional station codes and merge method fields of a form."""
+def _station_fields(
+    codes: list[str], method: str, max_age: int
+) -> dict[vol.Optional, Any]:
+    """Return the optional station codes, merge method and age limit fields."""
     return {
         vol.Optional(
             STATION,
@@ -87,6 +94,15 @@ def _station_fields(codes: list[str], method: str) -> dict[vol.Optional, Any]:
                 options=MERGE_METHODS,
                 translation_key=MERGE_METHOD,
                 mode=selector.SelectSelectorMode.DROPDOWN,
+            ),
+        ),
+        vol.Optional(MAX_AGE, default=max_age): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=MIN_MAX_AGE,
+                max=MAX_MAX_AGE,
+                step=1,
+                mode=selector.NumberSelectorMode.BOX,
+                unit_of_measurement="min",
             ),
         ),
     }
@@ -157,12 +173,15 @@ class IdokepFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         placeholders = {"code": ""}
         codes: list[str] = []
         method = MERGE_PRIORITY
+        max_age = DEFAULT_MAX_AGE
         if user_input is not None:
             user_input = {**user_input}
             # The name is the entry's title (and so the device names), not data
             name = (user_input.pop(CONF_NAME, "") or "").strip()
             codes = parse_codes(user_input.pop(STATION, None))
             method = user_input.pop(MERGE_METHOD, MERGE_PRIORITY)
+            # The number field gives a float
+            max_age = int(user_input.pop(MAX_AGE, DEFAULT_MAX_AGE))
             if not name:
                 _errors[CONF_NAME] = "name"
             elif error := await _async_location_error(self.hass, user_input[LOCATION]):
@@ -175,6 +194,7 @@ class IdokepFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 if codes:
                     user_input[STATION] = codes
                 user_input[MERGE_METHOD] = method
+                user_input[MAX_AGE] = max_age
                 return self.async_create_entry(title=name, data=user_input)
             user_input[CONF_NAME] = name
 
@@ -184,7 +204,7 @@ class IdokepFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 {
                     **_name_field((user_input or {}).get(CONF_NAME)),
                     **_location_field((user_input or {}).get(LOCATION)),
-                    **_station_fields(codes, method),
+                    **_station_fields(codes, method, max_age),
                 },
             ),
             errors=_errors,
@@ -214,18 +234,20 @@ class IdokepOptionsFlow(config_entries.OptionsFlowWithReload):
     async def async_step_init(
         self, user_input: dict | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Ask for the name, the location, the station codes and the merge method."""
+        """Ask for the name, the location and the station settings."""
         errors: dict[str, str] = {}
         placeholders = {"code": ""}
         name = self._entry.title
         location = self._entry.data[LOCATION]
         codes = station_codes(self._entry)
         method = merge_method(self._entry)
+        max_age = max_age_minutes(self._entry)
         if user_input is not None:
             name = (user_input.get(CONF_NAME) or "").strip()
             location = user_input[LOCATION].strip()
             codes = parse_codes(user_input.get(STATION))
             method = user_input.get(MERGE_METHOD, MERGE_PRIORITY)
+            max_age = int(user_input.get(MAX_AGE, DEFAULT_MAX_AGE))
             if not name:
                 errors[CONF_NAME] = "name"
             if location != self._entry.data[LOCATION]:
@@ -235,7 +257,7 @@ class IdokepOptionsFlow(config_entries.OptionsFlowWithReload):
             ):
                 errors[STATION], placeholders["code"] = problem
             if not errors:
-                options = {STATION: codes, MERGE_METHOD: method}
+                options = {STATION: codes, MERGE_METHOD: method, MAX_AGE: max_age}
                 self._async_update_entry(name, location, options)
                 # Reloaded afterwards, which adds or removes the station device
                 return self.async_create_entry(data=options)
@@ -246,7 +268,7 @@ class IdokepOptionsFlow(config_entries.OptionsFlowWithReload):
                 {
                     **_name_field(name),
                     **_location_field(location),
-                    **_station_fields(codes, method),
+                    **_station_fields(codes, method, max_age),
                 }
             ),
             errors=errors,

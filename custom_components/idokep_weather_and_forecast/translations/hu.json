@@ -6,13 +6,15 @@
                     "name": "Név",
                     "location": "Település",
                     "station": "Időjárás-állomások kódjai (nem kötelező)",
-                    "merge_method": "Összevonás módja"
+                    "merge_method": "Összevonás módja",
+                    "max_age": "Mérés maximális kora"
                 },
                 "data_description": {
                     "name": "A bejegyzés és eszközei neve (pl. Otthon).",
                     "location": "A település neve úgy, ahogy az idokep.hu címében szerepel (pl. Budapest).",
                     "station": "Idokep.hu automaták kódjai, ahogy a címükben szerepelnek (pl. jozsamet), fontossági sorrendben.",
-                    "merge_method": "A Prioritás minden értéket az első olyan állomástól vesz, amelynek van egy óránál frissebb mérése; az Átlag a mérések átlagát veszi."
+                    "merge_method": "A Prioritás minden értéket az első olyan állomástól vesz, amelynek van elég friss mérése; a Legfrissebb attól, amelynek a legutolsó a mérése; az Átlag a mérések átlagát veszi.",
+                    "max_age": "Az ennél több percnél régebbi állomásmérést nem használja (1-1440); ha egyik állomásnak sincs újabb mérése, a szenzor ismeretlen állapotú."
                 }
             }
         },
@@ -216,13 +218,15 @@
                     "name": "Név",
                     "location": "Település",
                     "station": "Időjárás-állomások kódjai (nem kötelező)",
-                    "merge_method": "Összevonás módja"
+                    "merge_method": "Összevonás módja",
+                    "max_age": "Mérés maximális kora"
                 },
                 "data_description": {
                     "name": "A bejegyzés neve; az eszközök neve is módosul, ha tartalmazza.",
                     "location": "A település neve úgy, ahogy az idokep.hu címében szerepel (pl. Budapest).",
                     "station": "Idokep.hu automaták kódjai, ahogy a címükben szerepelnek (pl. jozsamet), fontossági sorrendben. Törölve az időjárás-állomás eszköz megszűnik.",
-                    "merge_method": "A Prioritás minden értéket az első olyan állomástól vesz, amelynek van egy óránál frissebb mérése; az Átlag a mérések átlagát veszi."
+                    "merge_method": "A Prioritás minden értéket az első olyan állomástól vesz, amelynek van elég friss mérése; a Legfrissebb attól, amelynek a legutolsó a mérése; az Átlag a mérések átlagát veszi.",
+                    "max_age": "Az ennél több percnél régebbi állomásmérést nem használja (1-1440); ha egyik állomásnak sincs újabb mérése, a szenzor ismeretlen állapotú."
                 }
             }
         },
@@ -239,6 +243,7 @@
         "merge_method": {
             "options": {
                 "priority": "Prioritás",
+                "newest": "Legfrissebb",
                 "average": "Átlag"
             }
         }

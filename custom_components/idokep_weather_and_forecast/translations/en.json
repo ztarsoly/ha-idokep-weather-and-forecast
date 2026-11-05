@@ -6,13 +6,15 @@
                     "name": "Name",
                     "location": "Settlement",
                     "station": "Weather station codes (optional)",
-                    "merge_method": "Merge method"
+                    "merge_method": "Merge method",
+                    "max_age": "Maximum reading age"
                 },
                 "data_description": {
                     "name": "The name of this entry and its devices (e.g. Home).",
                     "location": "The settlement name as it appears in idokep.hu URLs (e.g. Budapest).",
                     "station": "Codes of idokep.hu weather stations, as in their page addresses (e.g. jozsamet), in priority order.",
-                    "merge_method": "Priority takes each value from the first listed station with a reading from the last hour; Average takes the mean of the readings."
+                    "merge_method": "Priority takes each value from the first listed station with a recent enough reading; Newest from the station with the most recent reading; Average takes the mean of the readings.",
+                    "max_age": "A station reading older than this many minutes (1-1440) is not used; if no station has a newer one, the sensor shows unknown."
                 }
             }
         },
@@ -216,13 +218,15 @@
                     "name": "Name",
                     "location": "Settlement",
                     "station": "Weather station codes (optional)",
-                    "merge_method": "Merge method"
+                    "merge_method": "Merge method",
+                    "max_age": "Maximum reading age"
                 },
                 "data_description": {
                     "name": "The name of this entry; device names that contain it are renamed too.",
                     "location": "The settlement name as it appears in idokep.hu URLs (e.g. Budapest).",
                     "station": "Codes of idokep.hu weather stations, as in their page addresses (e.g. jozsamet), in priority order. Clear them to remove the weather station device.",
-                    "merge_method": "Priority takes each value from the first listed station with a reading from the last hour; Average takes the mean of the readings."
+                    "merge_method": "Priority takes each value from the first listed station with a recent enough reading; Newest from the station with the most recent reading; Average takes the mean of the readings.",
+                    "max_age": "A station reading older than this many minutes (1-1440) is not used; if no station has a newer one, the sensor shows unknown."
                 }
             }
         },
@@ -239,6 +243,7 @@
         "merge_method": {
             "options": {
                 "priority": "Priority",
+                "newest": "Newest",
                 "average": "Average"
             }
         }

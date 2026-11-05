@@ -80,6 +80,39 @@ class TestIdokepSensorEntityDescriptions:
         assert desc.suggested_display_precision == 1
         assert desc.state_class is None
 
+    @pytest.mark.parametrize("key", ["humidity", "dew_point", "pressure", "uv_index"])
+    def test_map_sensor_unavailable_without_value(
+        self, mock_coordinator: Mock, key: str
+    ) -> None:
+        """A settlement without a station: unavailable, not unknown."""
+        desc = next(d for d in ENTITY_DESCRIPTIONS if d.key == key)
+        mock_coordinator.last_update_success = True
+
+        mock_coordinator.data = {key: 12.5}
+        assert IdokepSensor(mock_coordinator, desc).available
+
+        mock_coordinator.data = {key: 0}  # 0 is a value
+        assert IdokepSensor(mock_coordinator, desc).available
+
+        mock_coordinator.data = {key: None}
+        assert not IdokepSensor(mock_coordinator, desc).available
+
+        mock_coordinator.data = {}  # the page was never read
+        assert not IdokepSensor(mock_coordinator, desc).available
+
+        mock_coordinator.data = {key: 12.5}
+        mock_coordinator.last_update_success = False
+        assert not IdokepSensor(mock_coordinator, desc).available
+
+    def test_other_sensors_stay_available_without_value(
+        self, mock_coordinator: Mock
+    ) -> None:
+        """The other sensors keep showing unknown, as before."""
+        desc = next(d for d in ENTITY_DESCRIPTIONS if d.key == "wind_speed")
+        mock_coordinator.last_update_success = True
+        mock_coordinator.data = {}
+        assert IdokepSensor(mock_coordinator, desc).available
+
     def test_precipitation_description(self) -> None:
         """Millimetres with the precipitation device class, no state class."""
         desc = next(d for d in ENTITY_DESCRIPTIONS if d.key == "precipitation")

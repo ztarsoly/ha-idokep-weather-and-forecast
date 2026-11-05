@@ -153,6 +153,7 @@ class TestIdokepInit:
 
         assert mock_station_class.call_args.kwargs["codes"] == ["jozsamet"]
         assert mock_station_class.call_args.kwargs["method"] == "priority"
+        assert mock_station_class.call_args.kwargs["max_age"] == 60
         assert mock_entry.runtime_data.station is station
         # A failed station fetch must not fail the entry: no first refresh
         station.async_refresh.assert_awaited_once()

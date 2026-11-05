@@ -26,7 +26,7 @@ from homeassistant.const import (
 
 from . import calculations
 from .api import WeatherConditionMapper, WindStrengthMapper
-from .coordinator import CURRENT, SOURCE_ENTITIES
+from .coordinator import CURRENT, HUMIDITY_MAP, PRESSURE_MAP, SOURCE_ENTITIES, UV_MAP
 from .entity import IdokepEntity, IdokepStationEntity
 
 if TYPE_CHECKING:
@@ -62,6 +62,14 @@ COMPASS_POINTS = [
     "nw",
     "nnw",
 ]
+
+
+# Sensors read from the station maps: unavailable if the settlement has no value
+MAP_SENSOR_KEYS = frozenset(
+    key
+    for source in (HUMIDITY_MAP, PRESSURE_MAP, UV_MAP)
+    for key in SOURCE_ENTITIES[source]
+)
 
 
 def bearing_to_compass(bearing: float | None) -> str | None:
@@ -414,6 +422,16 @@ class IdokepSensor(IdokepEntity, SensorEntity):
         )
 
     @property
+    def available(self) -> bool:
+        """Return False for a map sensor if the settlement has no value."""
+        if self.entity_description.key not in MAP_SENSOR_KEYS:
+            return super().available
+        return (
+            super().available
+            and self.coordinator.data.get(self.entity_description.key) is not None
+        )
+
+    @property
     def native_value(self) -> str | int | float | None:
         """Return the native value of the sensor."""
         if self.entity_description.key == "wind_direction":
@@ -460,7 +478,7 @@ class IdokepStationSensor(IdokepStationEntity, SensorEntity):
 
     @property
     def native_value(self) -> float | None:
-        """Return the merged value (None if no reading from the last hour)."""
+        """Return the merged value (None if every reading is over the age limit)."""
         return self.coordinator.data.values.get(self.entity_description.key)
 
     @property

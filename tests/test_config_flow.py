@@ -72,11 +72,12 @@ async def test_form_shows_current_name_location_and_station() -> None:
 
     assert result["type"] == FlowResultType.FORM
     schema = {str(key): key for key in result["data_schema"].schema}
-    assert list(schema) == ["name", "location", "station", "merge_method"]
+    assert list(schema) == ["name", "location", "station", "merge_method", "max_age"]
     assert schema["name"].default() == "Debrecen-Józsa"
     assert schema["location"].default() == "Debrecen-Józsa"
     assert schema["station"].description == {"suggested_value": ["jozsamet"]}
     assert schema["merge_method"].default() == "priority"
+    assert schema["max_age"].default() == 60
 
 
 @pytest.mark.asyncio
@@ -90,7 +91,11 @@ async def test_same_location_only_saves_station() -> None:
         )
 
     assert result["type"] == FlowResultType.CREATE_ENTRY
-    assert result["data"] == {"station": ["ha0kaistvan"], "merge_method": "priority"}
+    assert result["data"] == {
+        "station": ["ha0kaistvan"],
+        "merge_method": "priority",
+        "max_age": 60,
+    }
     check_location.assert_not_awaited()
     flow.hass.config_entries.async_update_entry.assert_not_called()
 
@@ -98,7 +103,9 @@ async def test_same_location_only_saves_station() -> None:
 @pytest.mark.asyncio
 async def test_new_location_updates_entry() -> None:
     """A new settlement changes the entry's location and unique ID, not its name."""
-    flow, entry = _flow(options={"station": ["jozsamet"], "merge_method": "priority"})
+    flow, entry = _flow(
+        options={"station": ["jozsamet"], "merge_method": "priority", "max_age": 60}
+    )
     location_check, station_check = _patch_checks()
     with location_check, station_check:
         result = await flow.async_step_init(
@@ -119,7 +126,9 @@ async def test_new_location_updates_entry() -> None:
 @pytest.mark.asyncio
 async def test_new_location_with_new_station_reloads_once() -> None:
     """Options changed too: Home Assistant's automatic reload is enough."""
-    flow, _ = _flow(options={"station": ["jozsamet"], "merge_method": "priority"})
+    flow, _ = _flow(
+        options={"station": ["jozsamet"], "merge_method": "priority", "max_age": 60}
+    )
     location_check, station_check = _patch_checks()
     with location_check, station_check:
         await flow.async_step_init({"name": "Debrecen-Józsa", "location": "Debrecen", "station": "ha0kaistvan"})
@@ -182,7 +191,10 @@ def _devices(*names: tuple[str, str | None]) -> list[Mock]:
 @pytest.mark.asyncio
 async def test_new_name_renames_entry_and_devices() -> None:
     """A new name becomes the title; device names containing the old one follow."""
-    flow, entry = _flow(title="Home", options={"station": ["jozsamet"], "merge_method": "priority"})
+    flow, entry = _flow(
+        title="Home",
+        options={"station": ["jozsamet"], "merge_method": "priority", "max_age": 60},
+    )
     devices = _devices(
         ("Home Forecast", None),  # default name
         ("Home Weather", "Home Weather station"),  # renamed, still has "Home"
@@ -260,7 +272,7 @@ async def test_user_form_fields() -> None:
     result = await _user_flow().async_step_user()
 
     schema = {str(key): key for key in result["data_schema"].schema}
-    assert list(schema) == ["name", "location", "station", "merge_method"]
+    assert list(schema) == ["name", "location", "station", "merge_method", "max_age"]
     assert isinstance(schema["name"], vol.Required)
     assert isinstance(schema["location"], vol.Required)
     assert isinstance(schema["station"], vol.Optional)
@@ -282,6 +294,7 @@ async def test_user_name_is_the_entry_title() -> None:
         "location": "Debrecen-Józsa",
         "station": ["jozsamet"],
         "merge_method": "priority",
+        "max_age": 60,
     }
     flow.async_set_unique_id.assert_awaited_once_with(unique_id="debrecen-jozsa")
 
@@ -313,6 +326,7 @@ async def test_user_several_stations_and_merge_method() -> None:
                 "location": "Debrecen-Józsa",
                 "station": ["jozsamet", " ha0kaistvan ", "jozsamet"],
                 "merge_method": "average",
+                "max_age": 90.0,
             }
         )
 
@@ -321,7 +335,9 @@ async def test_user_several_stations_and_merge_method() -> None:
         "location": "Debrecen-Józsa",
         "station": ["jozsamet", "ha0kaistvan"],
         "merge_method": "average",
+        "max_age": 90,
     }
+    assert isinstance(result["data"]["max_age"], int)
 
 
 # ---- the idokep.hu checks behind the dialogs -------------------------------------
@@ -413,3 +429,50 @@ async def test_user_unknown_station_is_refused() -> None:
     assert result["type"] == FlowResultType.FORM
     assert result["errors"] == {"station": "station"}
     assert result["description_placeholders"] == {"code": "nope"}
+
+
+@pytest.mark.asyncio
+async def test_configure_saves_newest_and_age_limit() -> None:
+    """Configure offers the entry's current values and saves new ones as whole minutes."""
+    flow, _ = _flow(
+        options={"station": ["jozsamet"], "merge_method": "newest", "max_age": 30}
+    )
+    schema = {
+        str(key): key
+        for key in (await flow.async_step_init())["data_schema"].schema
+    }
+    assert schema["merge_method"].default() == "newest"
+    assert schema["max_age"].default() == 30
+
+    location_check, station_check = _patch_checks()
+    with location_check, station_check:
+        result = await flow.async_step_init(
+            {
+                "name": "Debrecen-Józsa",
+                "location": "Debrecen-Józsa",
+                "station": "jozsamet",
+                "merge_method": "newest",
+                "max_age": 120.0,
+            }
+        )
+
+    assert result["data"] == {
+        "station": ["jozsamet"],
+        "merge_method": "newest",
+        "max_age": 120,
+    }
+    assert isinstance(result["data"]["max_age"], int)
+
+
+@pytest.mark.parametrize(
+    ("value", "valid"), [(1, True), (1440, True), (0, False), (1441, False)]
+)
+def test_age_limit_field_range(value: int, valid: bool) -> None:
+    """The field accepts 1-1440 minutes."""
+    validator = config_flow._station_fields([], "priority", 60)
+    field = next(v for k, v in validator.items() if str(k) == "max_age")
+    if valid:
+        assert field(value) == value
+    else:
+        with pytest.raises(vol.Invalid):
+            field(value)

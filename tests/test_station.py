@@ -43,6 +43,7 @@ from custom_components.idokep_weather_and_forecast.station import (
     Reading,
     StationReadings,
     latest_readings,
+    max_age_minutes,
     merge_method,
     merge_readings,
     parse_codes,
@@ -195,6 +196,57 @@ def test_latest_readings() -> None:
     assert station.last == datetime.fromtimestamp(recent, tz=UTC)
 
 
+@pytest.mark.parametrize(
+    ("minutes_old", "max_age", "kept"),
+    [(30, 60, True), (60, 60, True), (61, 60, False), (61, 90, True), (31, 30, False)],
+)
+def test_latest_readings_age_limit(minutes_old: int, max_age: int, kept: bool) -> None:
+    """A reading counts up to the configured number of minutes, inclusive."""
+    time = int((NOW - timedelta(minutes=minutes_old)).timestamp())
+    decoded = StationSeries(times=[time], series={"hom": [10.0]})
+
+    station = latest_readings(decoded, "jozsamet", NOW, max_age)
+
+    assert ("hom" in station.readings) is kept
+    assert station.available == {"hom"}  # still measured, so unknown if too old
+
+
+@pytest.mark.parametrize(
+    ("data", "options", "minutes"),
+    [
+        ({}, {}, 60),
+        ({"max_age": 30}, {}, 30),
+        ({"max_age": 30}, {"max_age": 90}, 90),
+        ({}, {"max_age": 120.0}, 120),
+        ({}, {"max_age": 0}, 60),
+        ({}, {"max_age": 1441}, 60),
+        ({}, {"max_age": "x"}, 60),
+    ],
+)
+def test_max_age_minutes(data: dict, options: dict, minutes: int) -> None:
+    """Options override data; a missing or impossible value means 60 minutes."""
+    assert max_age_minutes(Mock(data=data, options=options)) == minutes
+
+
+@pytest.mark.asyncio
+async def test_update_uses_the_configured_age_limit() -> None:
+    """The coordinator applies its age limit to the readings."""
+    coordinator = _coordinator()
+    time = int((NOW - timedelta(minutes=45)).timestamp())
+    series = StationSeries(times=[time], series={"hom": [7.5]})
+    with (
+        _fetching(coordinator, {"jozsamet": series}),
+        patch(
+            "custom_components.idokep_weather_and_forecast.station.dt_util.utcnow",
+            return_value=NOW,
+        ),
+    ):
+        coordinator.max_age = 30
+        assert (await coordinator._async_update_data()).values == {"hom": None}
+        coordinator.max_age = 60
+        assert (await coordinator._async_update_data()).values == {"hom": 7.5}
+
+
 # ---- merging ---------------------------------------------------------------------
 
 
@@ -221,6 +273,29 @@ def test_merge_priority() -> None:
     assert data.sources == {"hom": ("a",), "rh": ("a",), "szelirany": ("a",), "uv": ("b",)}
     assert data.available == {"hom", "rh", "szelirany", "uv"}
     assert data.measured == NOW - timedelta(minutes=2)  # newest reading used (uv)
+
+
+def test_merge_newest() -> None:
+    """Newest: per value, the station with the most recent reading."""
+    data = merge_readings([A, B], "newest")
+
+    # B is newer; rh is only measured by A
+    assert data.values == {"hom": 12.0, "rh": 80.0, "szelirany": 10.0, "uv": 3.0}
+    assert data.sources == {
+        "hom": ("b",),
+        "rh": ("a",),
+        "szelirany": ("b",),
+        "uv": ("b",),
+    }
+    assert data.measured == NOW - timedelta(minutes=2)
+
+
+def test_merge_newest_tie_takes_the_first_listed() -> None:
+    """Readings of the same time: the listing order decides."""
+    first = _station("first", 5, hom=10.0)
+    second = _station("second", 5, hom=12.0)
+    assert merge_readings([first, second], "newest").sources == {"hom": ("first",)}
+    assert merge_readings([second, first], "newest").sources == {"hom": ("second",)}
 
 
 def test_merge_average() -> None:
@@ -308,6 +383,7 @@ def _fetching(coordinator: StationCoordinator, files: dict[str, object]) -> obje
     coordinator._session = Mock()
     coordinator.codes = list(files)
     coordinator.method = "priority"
+    coordinator.max_age = 60
     coordinator.logger = Mock()
 
     async def fetch(_session: object, code: str) -> object:
@@ -505,8 +581,9 @@ def test_parse_codes(raw: object, expected: list[str]) -> None:
             "average",
         ),
         ({"station": ["jozsamet"]}, {"station": [], "merge_method": "x"}, [], "priority"),
-        # Newest was removed: such entries fall back to priority
-        ({"station": "a", "merge_method": "newest"}, {}, ["a"], "priority"),
+        ({"station": "a", "merge_method": "newest"}, {}, ["a"], "newest"),
+        # A method that no longer exists falls back to priority
+        ({"station": "a", "merge_method": "oldest"}, {}, ["a"], "priority"),
     ],
 )
 def test_station_codes_and_merge_method(
@@ -681,10 +758,17 @@ def test_coordinator_setup(mock_hass: Mock) -> None:
     """The coordinator keeps its codes and merge method; no polling interval."""
     entry = Mock(entry_id="entry1")
     coordinator = StationCoordinator(
-        mock_hass, getLogger(__name__), entry, Mock(), ["jozsamet", "olig13"], "average"
+        mock_hass,
+        getLogger(__name__),
+        entry,
+        Mock(),
+        ["jozsamet", "olig13"],
+        "average",
+        30,
     )
     assert coordinator.codes == ["jozsamet", "olig13"]
     assert coordinator.method == "average"
+    assert coordinator.max_age == 30
     assert coordinator.update_interval is None
     assert coordinator.name == "idokep_weather_and_forecast_station_entry1"
 
