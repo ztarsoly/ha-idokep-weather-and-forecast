@@ -26,7 +26,7 @@ from homeassistant.const import (
 
 from . import calculations
 from .api import WeatherConditionMapper, WindStrengthMapper
-from .coordinator import CURRENT, HOURLY
+from .coordinator import CURRENT, SOURCE_ENTITIES
 from .entity import IdokepEntity, IdokepStationEntity
 
 if TYPE_CHECKING:
@@ -62,18 +62,6 @@ COMPASS_POINTS = [
     "nw",
     "nnw",
 ]
-# Sensors whose data comes from the forecast page (/elorejelzes/); the others
-# come from the current conditions page (/idojaras/)
-HOURLY_KEYS = (
-    "temperature_max_today",
-    "temperature_min_today",
-    "wind_bearing",
-    "wind_direction",
-    "wind_strength",
-    "wind_speed",
-    "precipitation",
-    "precipitation_probability",
-)
 
 
 def bearing_to_compass(bearing: float | None) -> str | None:
@@ -157,6 +145,34 @@ ENTITY_DESCRIPTIONS = (
         key="precipitation_probability",
         translation_key="precipitation_probability",
         native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=DISPLAY_PRECISION,
+    ),
+    # Average of the settlement's stations on idokep.hu's maps
+    SensorEntityDescription(
+        key="humidity",
+        translation_key="humidity",
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=DISPLAY_PRECISION,
+        device_class=SensorDeviceClass.HUMIDITY,
+    ),
+    SensorEntityDescription(
+        key="dew_point",
+        translation_key="dew_point",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        suggested_display_precision=DISPLAY_PRECISION,
+        device_class=SensorDeviceClass.TEMPERATURE,
+    ),
+    SensorEntityDescription(
+        key="pressure",
+        translation_key="pressure",
+        native_unit_of_measurement=UnitOfPressure.HPA,
+        suggested_display_precision=DISPLAY_PRECISION,
+        device_class=SensorDeviceClass.ATMOSPHERIC_PRESSURE,
+    ),
+    SensorEntityDescription(
+        key="uv_index",
+        translation_key="uv_index",
+        native_unit_of_measurement=UV_INDEX,
         suggested_display_precision=DISPLAY_PRECISION,
     ),
 )
@@ -383,7 +399,14 @@ class IdokepSensor(IdokepEntity, SensorEntity):
         entity_description: SensorEntityDescription,
     ) -> None:
         """Initialize the sensor class."""
-        source = HOURLY if entity_description.key in HOURLY_KEYS else CURRENT
+        source = next(
+            (
+                source
+                for source, keys in SOURCE_ENTITIES.items()
+                if entity_description.key in keys
+            ),
+            CURRENT,
+        )
         super().__init__(coordinator, frozenset({source}))
         self.entity_description = entity_description
         self._attr_unique_id = (

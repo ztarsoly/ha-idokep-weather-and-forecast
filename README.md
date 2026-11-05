@@ -10,7 +10,7 @@ Az integráció az idokep.hu nyilvános oldalait olvassa (nincs hivatalos API, f
 ## Funkciók
 
 - **Időjárás entitás** óránkénti és napi (kb. 23 napos) előrejelzéssel, a Home Assistant új forecast API-jával
-- **Előrejelzési szenzorok**: hőmérséklet, állapot, mai maximum/minimum, szélirány, szélerősség, becsült szélsebesség, csapadék, csapadék valószínűsége
+- **Előrejelzési szenzorok**: hőmérséklet, állapot, mai maximum/minimum, szélirány, szélerősség, becsült szélsebesség, csapadék, csapadék valószínűsége, valamint a település állomásainak átlagából páratartalom, harmatpont, légnyomás és UV-index
 - **Riasztások**: vihar a következő órában, általános, sárga, narancs és piros riasztás
 - **Időjárás-állomások** (nem kötelező): egy vagy több idokep.hu automata 12 mért adata egy eszközben összevonva, belőlük számított értékek (harmatpont, hőérzet, nedves hőmérséklet, abszolút páratartalom, páranyomás, páranyomás-hiány, felhőalap) és a mérés ideje
 - **Országos radar**: animált GIF az utolsó 5 radarképből, külön szolgáltatásként
@@ -25,7 +25,7 @@ Minden felvett bejegyzéshez (településhez) az alábbiak jönnek létre. A `<N
 
 | Entitás | Típus | Megjegyzés |
 |---|---|---|
-| `<Név> Forecast` | időjárás | aktuális állapot, hőmérséklet, szél, a település (`settlement` attribútum), az aktuális óra csapadéka (`precipitation` attribútum, mm); óránkénti és napi előrejelzés |
+| `<Név> Forecast` | időjárás | aktuális állapot, hőmérséklet, szél, páratartalom, harmatpont, légnyomás, UV-index, az aktuális óra csapadéka (`precipitation` attribútum, mm); óránkénti és napi előrejelzés |
 | Hőmérséklet | szenzor (°C) | aktuális |
 | Állapot | szenzor (felsorolás) | pl. napos, borult, eső |
 | Mai maximum hőmérséklet | szenzor (°C) | a napi előrejelzésből, éjfélig megmarad |
@@ -36,6 +36,10 @@ Minden felvett bejegyzéshez (településhez) az alábbiak jönnek létre. A `<N
 | Szélsebesség | szenzor (km/h) | **becslés** a szélerősségből (az idokep.hu nem ad számot) |
 | Csapadék | szenzor (mm) | az aktuális óra csapadéka az előrejelzésből (egész mm) |
 | Csapadék valószínűsége | szenzor (%) | az aktuális óra előrejelzéséből; 0, ha az oldal nem mutat értéket |
+| Páratartalom | szenzor (%) | a település állomásainak átlaga a páratartalom-térképről (`/para`) |
+| Harmatpont | szenzor (°C) | a település állomásainak átlaga a harmatpont-térképről (`/para`) |
+| Légnyomás | szenzor (hPa) | a település állomásainak átlaga a légnyomástérképről (`/legnyomas`), tengerszintre átszámítva |
+| UV-B index | szenzor | a település állomásainak átlaga az UV-térképről (`/uv`); kevés állomás méri |
 | Vihar várható az elkövetkező órában | bináris szenzor | |
 | Riasztás | bináris szenzor | bármilyen riasztás |
 | Sárga / Narancs / Piros riasztás | bináris szenzor | szintenként |
@@ -122,15 +126,18 @@ A bejegyzés nevét a Home Assistant saját **Átnevezés** funkciójával lehet
 | Aktuális időjárás (`/idojaras/`) | hőmérséklet, állapot | 10 percenként (x:00, x:10, x:20, …) | percenként újra |
 | Előrejelzés (`/elorejelzes/`) | óránkénti és napi előrejelzés, mai max/min, szél, riasztások | óránként (x:00) | 10 percenként újra |
 | Időjárás-állomások (`/automata/<kód>`) | állomás szenzorai | 5 percenként (x:00:59, x:05:59, …), minden állomás egyszerre | percenként újra, ha egyik sem érhető el |
+| Páratartalom-térkép (`/para`) | páratartalom, harmatpont | 10 percenként (x:00, x:10, x:20, …) | percenként újra |
+| Légnyomástérkép (`/legnyomas`) | légnyomás | 10 percenként (x:00, x:10, x:20, …) | percenként újra |
+| UV-térkép (`/uv`) | UV-B index | 10 percenként (x:00, x:10, x:20, …) | percenként újra |
 | Radar (`/radar/`) | radarkép | 5 percenként (x:00:59, x:05:59, …) | percenként, amíg új kép nem érkezik |
 
 - Indításkor (újraindítás, újratöltés, új bejegyzés) minden adat azonnal frissül.
-- Csak az az oldal töltődik le, amelyet legalább egy bekapcsolt entitás használ.
+- Csak az az oldal töltődik le, amelyet legalább egy bekapcsolt entitás használ; a többi újraindításkor sem. A térképoldalakhoz a saját szenzoraik tartoznak: ha egy oldal minden szenzorát kikapcsolod, az oldal letöltése leáll, és az időjárás entitás megfelelő attribútumai is eltűnnek. Az előrejelzési oldalt az időjárás entitás is használja, így az csak akkor áll le, ha az is ki van kapcsolva.
 - Ha a bejegyzés rendszerbeállításaiban kikapcsolod a lekérdezést (**Enable polling for updates**), az ütemezett frissítés leáll.
 
 ## Adattárolás
 
-Az előrejelzési oldalak legutóbbi sikeres adatai a Home Assistant `config/.storage/idokep_weather_and_forecast.<bejegyzés azonosító>` fájljába kerülnek. Újraindítás után csak a még érvényes adatok töltődnek vissza (el nem múlt órák és napok, a mai max/min aznap, a többi adat egy órán belül), így az entitások akkor is kapnak értéket, ha az idokep.hu épp nem érhető el. A bejegyzés törlésekor a fájl is törlődik. Az állomás és a radar adatai nem kerülnek lemezre.
+Az előrejelzési oldalak és az állomástérképek legutóbbi sikeres adatai a Home Assistant `config/.storage/idokep_weather_and_forecast.<bejegyzés azonosító>` fájljába kerülnek. Újraindítás után csak a még érvényes adatok töltődnek vissza (el nem múlt órák és napok, a mai max/min aznap, a többi adat egy órán belül), így az entitások akkor is kapnak értéket, ha az idokep.hu épp nem érhető el. A bejegyzés törlésekor a fájl is törlődik. Az állomás és a radar adatai nem kerülnek lemezre.
 
 ## Megjegyzések
 

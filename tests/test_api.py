@@ -25,6 +25,7 @@ from custom_components.idokep_weather_and_forecast.api import (
     WeatherConditionMapper,
     WindStrengthMapper,
     set_daily_probabilities,
+    station_map_average,
 )
 
 
@@ -1984,3 +1985,170 @@ def test_client_passes_restored_data_to_the_parsers() -> None:
         client.restore_hourly_forecast(hours)
     daily.assert_called_once_with(today)
     hourly.assert_called_once_with(hours)
+
+
+# ---- station maps (/para, /legnyomas) ---------------------------------------------
+
+
+def _humidity_area(code: str, value: int, name: str, href: str | None = None) -> str:
+    link = href or f"https://www.idokep.hu/automata/{code}"
+    return (
+        f"<area shape='rect' coords='1,2,3,4' href='{link}' "
+        f"onmouseover='this.T_WIDTH=150;Tip(\"<b>{value}%</b><br><b>{name}</b><br>"
+        f"({code})<br>TSZF: 128m<br>ma 14:19<br><img src=/automata/{code}_rh.png>\")'>"
+    )
+
+
+def _dew_point_area(code: str, value: int, name: str) -> str:
+    return (
+        f"<area shape='rect' coords='1,2,3,4' href='https://www.idokep.hu/automata/{code}' "
+        f"onmouseover='this.T_WIDTH=150;Tip(\"<b>{value} &deg;C</b><br><b>{name}</b><br>"
+        f"({code})<br>TSZF: 128m<br>ma 14:19\")'>"
+    )
+
+
+def _pressure_area(code: str, value: float, name: str) -> str:
+    return (
+        f"<area shape='rect' coords='1,2,3,4' href='https://www.idokep.hu/automata/{code}' "
+        f"onmouseover='this.T_WIDTH=350;Tip(\"{value} hPa <b>{name}</b> ({code})"
+        f"<br><img src=https://www.idokep.hu/automata/{code}_p.png>\")'>"
+    )
+
+
+HUMIDITY_PAGE = (
+    '<map name="rh">'
+    + _humidity_area("jozsamet", 59, "Debrecen-Józsa")
+    + _humidity_area("a", 50, "Debrecen")
+    + _humidity_area("b", 55, "Debrecen")
+    + _humidity_area("METAR_LHDC", 48, "Debrecen", href="#")
+    + _humidity_area("a", 99, "Debrecen")  # the same station listed again
+    + _humidity_area("c", 60, "Budapest XI. ker")
+    + _humidity_area("d", 65, "Budapest, Csepel")
+    + _humidity_area("e", 90, "Budapestfalva")
+    + _humidity_area("f", 70, "S&aacute;rospatak")
+    + "</map><map name=\"td\">"
+    + _dew_point_area("jozsamet", 2, "Debrecen-Józsa")
+    + _dew_point_area("g", -3, "Debrecen")
+    + _dew_point_area("h", -4, "Debrecen")
+    + "</map>"
+)
+PRESSURE_PAGE = (
+    '<map name="legnyomasterkep">'
+    + _pressure_area("jozsamet", 1029.2, "Debrecen-Józsa")
+    + _pressure_area("i", 1028.1, "Pécs")
+    + _pressure_area("j", 1028.4, "Pécs")
+)  # no closing tag: this page's map may end with the page
+
+
+@pytest.mark.parametrize(
+    ("page", "map_name", "location", "expected"),
+    [
+        (HUMIDITY_PAGE, "rh", "Debrecen-Józsa", 59),
+        (HUMIDITY_PAGE, "td", "Debrecen-Józsa", 2),
+        (PRESSURE_PAGE, "legnyomasterkep", "Debrecen-Józsa", 1029.2),
+        # Several stations: the average; exact names beat "Debrecen-Józsa"; a
+        # repeated station counts once; a station without a page still counts
+        (HUMIDITY_PAGE, "rh", "Debrecen", 51),
+        (HUMIDITY_PAGE, "td", "Debrecen", -3.5),
+        (PRESSURE_PAGE, "legnyomasterkep", "Pécs", 1028.25),
+        # No exact name: stations named after it, not "Budapestfalva"
+        (HUMIDITY_PAGE, "rh", "Budapest", 62.5),
+        # Case, spaces and HTML entities don't matter
+        (HUMIDITY_PAGE, "rh", " debrecen-józsa ", 59),
+        (HUMIDITY_PAGE, "rh", "Sárospatak", 70),
+        # No station
+        (HUMIDITY_PAGE, "rh", "Hortobágy", None),
+        (HUMIDITY_PAGE, "td", "Budapest", None),
+    ],
+)
+def test_station_map_average(
+    page: str, map_name: str, location: str, expected: float | None
+) -> None:
+    """The settlement's value is the average of its stations on that map."""
+    assert station_map_average(page, map_name, location) == expected
+
+
+def test_station_map_average_rounds_to_two_decimals() -> None:
+    """Averages have at most 2 decimals."""
+    page = (
+        '<map name="rh">'
+        + _humidity_area("a", 50, "Pécs")
+        + _humidity_area("b", 51, "Pécs")
+        + _humidity_area("c", 51, "Pécs")
+        + "</map>"
+    )
+    assert station_map_average(page, "rh", "Pécs") == 50.67
+
+
+def test_station_map_missing_is_a_failed_fetch() -> None:
+    """A page without the map (redesign, error page) is retried."""
+    with pytest.raises(IdokepApiClientCommunicationError, match="td"):
+        station_map_average("<html></html>", "td", "Pécs")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("location", "humidity", "dew_point"),
+    [("Debrecen-Józsa", 59, 2), ("Hortobágy", None, None)],
+)
+async def test_client_reads_the_humidity_map(
+    location: str, humidity: float | None, dew_point: float | None
+) -> None:
+    """Humidity and dew point come from /para, also empty without a station."""
+    client = IdokepApiClient(Mock())
+    with patch.object(
+        client._http_client, "get_html", AsyncMock(return_value=HUMIDITY_PAGE)
+    ) as get_html:
+        result = await client.async_get_humidity_map(location)
+
+    get_html.assert_awaited_once_with("https://www.idokep.hu/para")
+    assert result == {"humidity": humidity, "dew_point": dew_point}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("location", "pressure"), [("Debrecen-Józsa", 1029.2), ("Hortobágy", None)]
+)
+async def test_client_reads_the_pressure_map(
+    location: str, pressure: float | None
+) -> None:
+    """Pressure comes from /legnyomas, also empty without a station."""
+    client = IdokepApiClient(Mock())
+    with patch.object(
+        client._http_client, "get_html", AsyncMock(return_value=PRESSURE_PAGE)
+    ) as get_html:
+        result = await client.async_get_pressure_map(location)
+
+    get_html.assert_awaited_once_with("https://www.idokep.hu/legnyomas")
+    assert result == {"pressure": pressure}
+
+
+UV_PAGE = (
+    '<map name="uv">'
+    "<area shape='rect' coords='1,2,3,4' href='https://www.idokep.hu/automata/bpa25' "
+    "onmouseover='this.T_WIDTH=350;Tip(\" 0.5 <b>Csem&#337;</b> (bpa25)<br>"
+    "<img src=https://www.idokep.hu/automata/bpa25_uv.png>\")'>"
+    "<area shape='rect' coords='1,2,3,4' href='https://www.idokep.hu/automata/b' "
+    "onmouseover='this.T_WIDTH=350;Tip(\" 1.0 <b>Csem&#337;</b> (b)<br>"
+    "<img src=https://www.idokep.hu/automata/b_uv.png>\")'>"
+    "</map>"
+)
+
+
+def test_uv_map_tooltips_are_read() -> None:
+    """The UV tooltip starts with a space; entities in names are decoded."""
+    assert station_map_average(UV_PAGE, "uv", "Csemő") == 0.75
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("location", "uv_index"), [("Csemő", 0.75), ("Hortobágy", None)])
+async def test_client_reads_the_uv_map(location: str, uv_index: float | None) -> None:
+    """The UV index comes from /uv, also empty without a station."""
+    client = IdokepApiClient(Mock())
+    with patch.object(
+        client._http_client, "get_html", AsyncMock(return_value=UV_PAGE)
+    ) as get_html:
+        result = await client.async_get_uv_map(location)
+
+    get_html.assert_awaited_once_with("https://www.idokep.hu/uv")
+    assert result == {"uv_index": uv_index}

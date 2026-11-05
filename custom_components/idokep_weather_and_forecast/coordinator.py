@@ -7,12 +7,19 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
 from .api import IdokepApiClientCommunicationError
-from .const import CURRENT, HOURLY
+from .const import (
+    CURRENT,
+    HOURLY,
+    HUMIDITY_MAP,
+    PRESSURE_MAP,
+    UV_MAP,
+)
 from .storage import SAVE_DELAY, STORAGE_VERSION, restore, serialize, storage_key
 
 if TYPE_CHECKING:
@@ -27,6 +34,35 @@ if TYPE_CHECKING:
 REQUIRED_KEYS = {
     CURRENT: "temperature",
     HOURLY: "hourly_forecast",
+    HUMIDITY_MAP: "humidity",
+    PRESSURE_MAP: "pressure",
+    UV_MAP: "uv_index",
+}
+
+
+# The entities reading each page, by the end of their unique ID. Needed at
+# startup, before the entities listen; current conditions are always fetched
+# then, since the entry starts from them.
+SOURCE_ENTITIES = {
+    HOURLY: (
+        "weather",
+        "temperature_max_today",
+        "temperature_min_today",
+        "wind_bearing",
+        "wind_direction",
+        "wind_strength",
+        "wind_speed",
+        "precipitation",
+        "precipitation_probability",
+        "storm_expected_1h",
+        "weather_alert",
+        "alert_yellow",
+        "alert_orange",
+        "alert_red",
+    ),
+    HUMIDITY_MAP: ("humidity", "dew_point"),
+    PRESSURE_MAP: ("pressure",),
+    UV_MAP: ("uv_index",),
 }
 
 
@@ -80,9 +116,14 @@ class IdokepDataUpdateCoordinator(DataUpdateCoordinator):
     - current conditions (/idojaras/): every 10 minutes, retry every minute
     - forecast (/elorejelzes/: hourly and daily forecast, alerts, today's
       max/min): every full hour, retry every 10 minutes
+    - humidity map (/para: humidity, dew point): every 10 minutes, retry every
+      minute
+    - pressure map (/legnyomas: pressure): every 10 minutes, retry every minute
+    - UV map (/uv: UV index): every 10 minutes, retry every minute
 
     There is no update_interval; async_tick is called at every whole minute
-    and refreshes only when a source used by an enabled entity is due.
+    and refreshes only when a source used by an enabled entity is due. A page
+    whose entities are all disabled is not fetched and its data is dropped.
     """
 
     config_entry: IdokepConfigEntry
@@ -106,6 +147,9 @@ class IdokepDataUpdateCoordinator(DataUpdateCoordinator):
         self.schedules: dict[str, SourceSchedule] = {
             CURRENT: SourceSchedule(next_ten_minutes, timedelta(minutes=1)),
             HOURLY: SourceSchedule(next_full_hour, timedelta(minutes=10)),
+            HUMIDITY_MAP: SourceSchedule(next_ten_minutes, timedelta(minutes=1)),
+            PRESSURE_MAP: SourceSchedule(next_ten_minutes, timedelta(minutes=1)),
+            UV_MAP: SourceSchedule(next_ten_minutes, timedelta(minutes=1)),
         }
         # Last successful result per source, kept while a source is failing
         self._source_data: dict[str, dict[str, Any]] = {
@@ -200,6 +244,31 @@ class IdokepDataUpdateCoordinator(DataUpdateCoordinator):
             needed |= sources
         return needed
 
+    def _sources_at_startup(self) -> set[str]:
+        """
+        Return the sources to fetch before any entity listens.
+
+        A page is left out if all of its entities are registered as disabled;
+        one not registered yet is new, so it is enabled by default.
+        """
+        entry_id = self.config_entry.entry_id
+        registered = {
+            entity.unique_id: entity
+            for entity in er.async_entries_for_config_entry(
+                er.async_get(self.hass), entry_id
+            )
+        }
+        disabled = {
+            source
+            for source, keys in SOURCE_ENTITIES.items()
+            if all(
+                (entity := registered.get(f"{entry_id}_{key}")) is not None
+                and entity.disabled
+                for key in keys
+            )
+        }
+        return set(self.schedules) - disabled
+
     async def async_tick(self, now: datetime) -> None:
         """Refresh if a needed source is due (called at every whole minute)."""
         # Honour the entry's "Enable polling for updates" system option, as
@@ -216,6 +285,9 @@ class IdokepDataUpdateCoordinator(DataUpdateCoordinator):
         return {
             CURRENT: client.async_get_current_weather,
             HOURLY: client.async_get_hourly_forecast,
+            HUMIDITY_MAP: client.async_get_humidity_map,
+            PRESSURE_MAP: client.async_get_pressure_map,
+            UV_MAP: client.async_get_uv_map,
         }
 
     async def _async_update_data(self) -> dict:
@@ -223,8 +295,8 @@ class IdokepDataUpdateCoordinator(DataUpdateCoordinator):
         location = self.config_entry.data["location"]
         now = floor_to_minute(dt_util.utcnow())
         # The first refresh runs during setup, before any entity listens; it
-        # fetches everything so the entry can start with data
-        wanted = set(self.schedules) if self.data is None else self.needed_sources()
+        # fetches every page with an enabled entity so the entry starts with data
+        wanted = self._sources_at_startup() if self.data is None else self.needed_sources()
         due = [
             source
             for source, schedule in self.schedules.items()
@@ -258,8 +330,14 @@ class IdokepDataUpdateCoordinator(DataUpdateCoordinator):
                 if self._store is not None:
                     self._store.async_delay_save(self._data_to_save, SAVE_DELAY)
 
+        # A page nobody reads anymore must not serve its old values (e.g. the
+        # weather entity's humidity); current conditions are kept as the base
+        for source in self.schedules.keys() - wanted - {CURRENT}:
+            self._source_data[source] = {}
+            self._fetched.pop(source, None)
+
         data: dict[str, Any] = {}
-        for source in (CURRENT, HOURLY):
+        for source in self.schedules:
             data.update(self._source_data[source])
 
         if not data:

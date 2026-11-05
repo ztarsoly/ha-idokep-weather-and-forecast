@@ -19,6 +19,10 @@ from custom_components.idokep_weather_and_forecast.api import (
 from custom_components.idokep_weather_and_forecast.coordinator import (
     CURRENT,
     HOURLY,
+    HUMIDITY_MAP,
+    PRESSURE_MAP,
+    SOURCE_ENTITIES,
+    UV_MAP,
     IdokepDataUpdateCoordinator,
     SourceSchedule,
     floor_to_minute,
@@ -37,6 +41,26 @@ HOURLY_DATA = {
     "alerts": [],
     "daily_forecast": [{"datetime": "y"}],
 }
+HUMIDITY_DATA = {"humidity": 59.0, "dew_point": 2.0}
+PRESSURE_DATA = {"pressure": 1029.2}
+UV_DATA = {"uv_index": 0.3}
+MAP_DATA = {**HUMIDITY_DATA, **PRESSURE_DATA, **UV_DATA}
+ALL_SOURCES = {CURRENT, HOURLY, HUMIDITY_MAP, PRESSURE_MAP, UV_MAP}
+
+
+@pytest.fixture(autouse=True)
+def registered_entities() -> Iterator[list[Mock]]:
+    """Patch the entity registry; tests add the entities registered before."""
+    entities: list[Mock] = []
+    with (
+        patch("custom_components.idokep_weather_and_forecast.coordinator.er.async_get"),
+        patch(
+            "custom_components.idokep_weather_and_forecast.coordinator.er"
+            ".async_entries_for_config_entry",
+            return_value=entities,
+        ),
+    ):
+        yield entities
 
 
 @pytest.fixture(autouse=True)
@@ -59,6 +83,9 @@ def client() -> Mock:
     client = Mock()
     client.async_get_current_weather = AsyncMock(return_value=CURRENT_DATA)
     client.async_get_hourly_forecast = AsyncMock(return_value=HOURLY_DATA)
+    client.async_get_humidity_map = AsyncMock(return_value=HUMIDITY_DATA)
+    client.async_get_pressure_map = AsyncMock(return_value=PRESSURE_DATA)
+    client.async_get_uv_map = AsyncMock(return_value=UV_DATA)
     return client
 
 
@@ -160,11 +187,17 @@ class TestCoordinatorUpdates:
         """The first update fetches every page and merges the results."""
         data = await update_at(coordinator, local(2026, 10, 29, 12, 7))
 
-        assert data == {**CURRENT_DATA, **HOURLY_DATA}
+        assert data == {**CURRENT_DATA, **HOURLY_DATA, **MAP_DATA}
         client.async_get_current_weather.assert_awaited_once_with("Budapest")
         client.async_get_hourly_forecast.assert_awaited_once_with("Budapest")
-        assert set(coordinator.schedules) == {CURRENT, HOURLY}
+        client.async_get_humidity_map.assert_awaited_once_with("Budapest")
+        client.async_get_pressure_map.assert_awaited_once_with("Budapest")
+        client.async_get_uv_map.assert_awaited_once_with("Budapest")
+        assert set(coordinator.schedules) == ALL_SOURCES
         assert coordinator.schedules[CURRENT].next_due == local(2026, 10, 29, 12, 10)
+        assert coordinator.schedules[HUMIDITY_MAP].next_due == local(2026, 10, 29, 12, 10)
+        assert coordinator.schedules[PRESSURE_MAP].next_due == local(2026, 10, 29, 12, 10)
+        assert coordinator.schedules[UV_MAP].next_due == local(2026, 10, 29, 12, 10)
         assert coordinator.schedules[HOURLY].next_due == local(2026, 10, 29, 13, 0)
 
     @pytest.mark.asyncio
@@ -189,6 +222,9 @@ class TestCoordinatorUpdates:
         [
             (CURRENT, "async_get_current_weather", local(2026, 10, 29, 12, 8)),
             (HOURLY, "async_get_hourly_forecast", local(2026, 10, 29, 12, 17)),
+            (HUMIDITY_MAP, "async_get_humidity_map", local(2026, 10, 29, 12, 8)),
+            (PRESSURE_MAP, "async_get_pressure_map", local(2026, 10, 29, 12, 8)),
+            (UV_MAP, "async_get_uv_map", local(2026, 10, 29, 12, 8)),
         ],
     )
     async def test_failed_fetch_is_retried(
@@ -252,6 +288,9 @@ class TestCoordinatorUpdates:
         error = IdokepApiClientCommunicationError("down")
         client.async_get_current_weather.side_effect = error
         client.async_get_hourly_forecast.side_effect = error
+        client.async_get_humidity_map.side_effect = error
+        client.async_get_pressure_map.side_effect = error
+        client.async_get_uv_map.side_effect = error
 
         with pytest.raises(UpdateFailed, match="No weather data found"):
             await update_at(coordinator, local(2026, 10, 29, 12, 7))
@@ -333,7 +372,7 @@ class TestNeededSources:
     async def test_first_refresh_fetches_everything(
         self, coordinator: IdokepDataUpdateCoordinator, client: Mock
     ) -> None:
-        """Setup runs before entities listen, so the first refresh gets all pages."""
+        """Setup runs before entities listen; with nothing disabled, all pages."""
         assert coordinator.needed_sources() == set()
 
         await update_at(coordinator, local(2026, 10, 29, 12, 7))
@@ -406,7 +445,7 @@ class TestSavedData:
         saved = fake_store.files["idokep_weather_and_forecast.entry1"]
         assert saved["location"] == "Budapest"
         sources = saved["sources"]
-        assert set(sources) == {CURRENT, HOURLY}
+        assert set(sources) == ALL_SOURCES
         assert sources[CURRENT]["data"] == CURRENT_DATA
         assert datetime.fromisoformat(sources[CURRENT]["fetched"]) == local(
             2026, 10, 29, 12, 7
@@ -467,7 +506,7 @@ class TestSavedData:
         data = await update_at(restarted, local(2026, 10, 29, 12, 30))
 
         # No UpdateFailed: the entry starts with the saved data
-        assert data == {**CURRENT_DATA, **hourly}
+        assert data == {**CURRENT_DATA, **hourly, **MAP_DATA}
 
     @pytest.mark.asyncio
     async def test_restore_seeds_todays_min_max(
@@ -624,3 +663,154 @@ async def test_restore_ignores_unknown_and_expired_pages(
 
     assert coordinator._source_data[CURRENT] == {}
     assert "unknown_page" not in coordinator._source_data
+
+
+@pytest.mark.asyncio
+async def test_settlement_without_stations_is_not_retried(
+    coordinator: IdokepDataUpdateCoordinator, client: Mock
+) -> None:
+    """No station for the settlement is a normal result, not a failed fetch."""
+    client.async_get_humidity_map.return_value = {"humidity": None, "dew_point": None}
+    client.async_get_pressure_map.return_value = {"pressure": None}
+    client.async_get_uv_map.return_value = {"uv_index": None}
+
+    data = await update_at(coordinator, local(2026, 10, 29, 12, 7))
+
+    assert data["humidity"] is None
+    assert data["pressure"] is None
+    assert coordinator.schedules[HUMIDITY_MAP].next_due == local(2026, 10, 29, 12, 10)
+    assert coordinator.schedules[PRESSURE_MAP].next_due == local(2026, 10, 29, 12, 10)
+    assert coordinator.schedules[UV_MAP].next_due == local(2026, 10, 29, 12, 10)
+
+
+@pytest.mark.asyncio
+async def test_map_pages_fail_and_retry_separately(
+    coordinator: IdokepDataUpdateCoordinator, client: Mock
+) -> None:
+    """A failed pressure page leaves humidity on schedule; only it is retried."""
+    client.async_get_pressure_map.side_effect = IdokepApiClientCommunicationError("down")
+
+    data = await update_at(coordinator, local(2026, 10, 29, 12, 7))
+
+    assert data["humidity"] == HUMIDITY_DATA["humidity"]
+    assert "pressure" not in data
+    assert coordinator.schedules[HUMIDITY_MAP].next_due == local(2026, 10, 29, 12, 10)
+    assert coordinator.schedules[PRESSURE_MAP].next_due == local(2026, 10, 29, 12, 8)
+
+    client.async_get_pressure_map.side_effect = None
+    data = await update_at(coordinator, local(2026, 10, 29, 12, 8))
+
+    assert data["pressure"] == PRESSURE_DATA["pressure"]
+    assert client.async_get_humidity_map.await_count == 1
+    assert client.async_get_pressure_map.await_count == 2
+
+
+def _registered(entry_id: str, keys: tuple[str, ...], *, disabled: bool) -> list[Mock]:
+    return [Mock(unique_id=f"{entry_id}_{key}", disabled=disabled) for key in keys]
+
+
+@pytest.mark.asyncio
+async def test_startup_skips_a_page_with_all_entities_disabled(
+    coordinator: IdokepDataUpdateCoordinator,
+    client: Mock,
+    registered_entities: list[Mock],
+) -> None:
+    """A restart doesn't fetch a page whose entities are all disabled."""
+    coordinator.config_entry.entry_id = "entry1"
+    registered_entities.extend(
+        _registered("entry1", ("humidity", "dew_point"), disabled=True)
+    )
+
+    data = await update_at(coordinator, local(2026, 10, 29, 12, 7))
+
+    client.async_get_humidity_map.assert_not_awaited()
+    client.async_get_pressure_map.assert_awaited_once()
+    assert "humidity" not in data
+    assert data["pressure"] == PRESSURE_DATA["pressure"]
+
+
+@pytest.mark.asyncio
+async def test_startup_fetches_a_page_with_one_entity_enabled(
+    coordinator: IdokepDataUpdateCoordinator,
+    client: Mock,
+    registered_entities: list[Mock],
+) -> None:
+    """One enabled sensor is enough; so is one not registered yet (new sensor)."""
+    coordinator.config_entry.entry_id = "entry1"
+    registered_entities.extend(
+        [
+            *_registered("entry1", ("humidity",), disabled=True),
+            *_registered("entry1", ("dew_point",), disabled=False),
+            *_registered("entry1", SOURCE_ENTITIES[HOURLY][1:], disabled=True),
+        ]
+    )
+
+    await update_at(coordinator, local(2026, 10, 29, 12, 7))
+
+    client.async_get_humidity_map.assert_awaited_once()
+    client.async_get_hourly_forecast.assert_awaited_once()  # "weather" is missing
+
+
+@pytest.mark.asyncio
+async def test_startup_always_fetches_current_conditions(
+    coordinator: IdokepDataUpdateCoordinator,
+    client: Mock,
+    registered_entities: list[Mock],
+) -> None:
+    """Even with every entity disabled, the entry starts from current conditions."""
+    coordinator.config_entry.entry_id = "entry1"
+    for keys in SOURCE_ENTITIES.values():
+        registered_entities.extend(_registered("entry1", keys, disabled=True))
+
+    data = await update_at(coordinator, local(2026, 10, 29, 12, 7))
+
+    client.async_get_current_weather.assert_awaited_once()
+    client.async_get_hourly_forecast.assert_not_awaited()
+    client.async_get_uv_map.assert_not_awaited()
+    assert data == CURRENT_DATA
+
+
+@pytest.mark.asyncio
+async def test_disabling_a_pages_sensors_stops_it_and_drops_its_values(
+    coordinator: IdokepDataUpdateCoordinator, client: Mock
+) -> None:
+    """Once nothing reads a page: no more fetches, and no old values are served."""
+    coordinator.data = await update_at(coordinator, local(2026, 10, 29, 12, 7))
+    listen(coordinator, CURRENT, HOURLY, PRESSURE_MAP, UV_MAP)  # humidity disabled
+
+    data = await update_at(coordinator, local(2026, 10, 29, 12, 10))
+
+    assert client.async_get_humidity_map.await_count == 1
+    assert client.async_get_pressure_map.await_count == 2
+    assert "humidity" not in data
+    assert "dew_point" not in data
+    assert data["pressure"] == PRESSURE_DATA["pressure"]
+    assert HUMIDITY_MAP not in coordinator._fetched
+
+
+@pytest.mark.asyncio
+async def test_restored_values_of_a_disabled_page_are_dropped(
+    coordinator: IdokepDataUpdateCoordinator,
+    registered_entities: list[Mock],
+    fake_store: type[FakeStore],
+) -> None:
+    """Values saved before the sensors were disabled don't come back."""
+    coordinator.config_entry.entry_id = "entry1"
+    registered_entities.extend(_registered("entry1", ("pressure",), disabled=True))
+    fake_store.files["idokep_weather_and_forecast.entry1"] = {
+        "location": "Budapest",
+        "sources": {
+            PRESSURE_MAP: {
+                "fetched": local(2026, 10, 29, 12, 0).isoformat(),
+                "data": PRESSURE_DATA,
+            },
+        },
+    }
+    with patch.object(
+        dt_util, "utcnow", return_value=dt_util.as_utc(local(2026, 10, 29, 12, 7))
+    ):
+        await coordinator.async_restore()
+
+    data = await update_at(coordinator, local(2026, 10, 29, 12, 7))
+
+    assert "pressure" not in data

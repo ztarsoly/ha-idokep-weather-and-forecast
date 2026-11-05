@@ -56,6 +56,12 @@
       "station_water_temperature": {
         "default": "mdi:pool-thermometer"
       },
+      "dew_point": {
+        "default": "mdi:thermometer-water"
+      },
+      "uv_index": {
+        "default": "mdi:sun-wireless-outline"
+      },
       "station_dew_point": {
         "default": "mdi:thermometer-water"
       },

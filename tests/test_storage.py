@@ -11,7 +11,13 @@ import pytest
 from homeassistant.util import dt as dt_util
 
 from custom_components.idokep_weather_and_forecast.api import AlertData
-from custom_components.idokep_weather_and_forecast.const import CURRENT, HOURLY
+from custom_components.idokep_weather_and_forecast.const import (
+    CURRENT,
+    HOURLY,
+    HUMIDITY_MAP,
+    PRESSURE_MAP,
+    UV_MAP,
+)
 from custom_components.idokep_weather_and_forecast.storage import (
     restore,
     serialize,
@@ -175,3 +181,19 @@ def test_restore_skips_hourly_items_without_a_valid_time() -> None:
         },
     }
     assert restore(HOURLY, saved, NOW)["hourly_forecast"] == [valid]
+
+
+@pytest.mark.parametrize(
+    ("source", "data"),
+    [
+        (HUMIDITY_MAP, {"humidity": 59.0, "dew_point": 2.0}),
+        (PRESSURE_MAP, {"pressure": 1029.2}),
+        (UV_MAP, {"uv_index": 0.3}),
+    ],
+)
+def test_restore_station_maps_only_if_fresh(source: str, data: dict) -> None:
+    """The values from the maps are kept for an hour."""
+    fresh = {"fetched": (NOW - timedelta(minutes=30)).isoformat(), "data": data}
+    old = {"fetched": (NOW - timedelta(minutes=90)).isoformat(), "data": data}
+    assert restore(source, fresh, NOW) == data
+    assert restore(source, old, NOW) == {}

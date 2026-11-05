@@ -112,6 +112,18 @@
             "precipitation_probability": {
                 "name": "Precipitation probability"
             },
+            "humidity": {
+                "name": "Humidity"
+            },
+            "dew_point": {
+                "name": "Dew point"
+            },
+            "pressure": {
+                "name": "Pressure"
+            },
+            "uv_index": {
+                "name": "UV index"
+            },
             "station_temperature": {
                 "name": "Temperature"
             },

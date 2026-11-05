@@ -12,7 +12,14 @@ from custom_components.idokep_weather_and_forecast.binary_sensor import (
 from custom_components.idokep_weather_and_forecast.binary_sensor import (
     IdokepBinarySensor,
 )
-from custom_components.idokep_weather_and_forecast.coordinator import CURRENT, HOURLY
+from custom_components.idokep_weather_and_forecast.coordinator import (
+    CURRENT,
+    HOURLY,
+    HUMIDITY_MAP,
+    PRESSURE_MAP,
+    SOURCE_ENTITIES,
+    UV_MAP,
+)
 from custom_components.idokep_weather_and_forecast.sensor import (
     ENTITY_DESCRIPTIONS as SENSOR_DESCRIPTIONS,
 )
@@ -34,6 +41,10 @@ SENSOR_SOURCES = {
     "wind_speed": HOURLY,
     "precipitation": HOURLY,
     "precipitation_probability": HOURLY,
+    "humidity": HUMIDITY_MAP,
+    "dew_point": HUMIDITY_MAP,
+    "pressure": PRESSURE_MAP,
+    "uv_index": UV_MAP,
 }
 
 
@@ -52,9 +63,26 @@ def test_binary_sensor_sources(mock_coordinator: Mock, description: object) -> N
 
 
 def test_weather_sources(mock_coordinator: Mock) -> None:
-    """The weather entity needs both pages."""
+    """The weather entity keeps two pages going; the maps follow their sensors."""
     entity = IdokepWeatherEntity(mock_coordinator)
     assert entity.coordinator_context == frozenset({CURRENT, HOURLY})
+
+
+def test_startup_list_matches_the_entities(mock_coordinator: Mock) -> None:
+    """SOURCE_ENTITIES names exactly the entities that read each page."""
+    entities = [
+        IdokepWeatherEntity(mock_coordinator),
+        *(IdokepSensor(mock_coordinator, d) for d in SENSOR_DESCRIPTIONS),
+        *(IdokepBinarySensor(mock_coordinator, d) for d in BINARY_SENSOR_DESCRIPTIONS),
+    ]
+    prefix = f"{mock_coordinator.config_entry.entry_id}_"
+    readers: dict[str, set[str]] = {}
+    for entity in entities:
+        for source in entity.coordinator_context:
+            readers.setdefault(source, set()).add(entity.unique_id.removeprefix(prefix))
+
+    assert readers.pop(CURRENT)  # always fetched at startup, so not listed
+    assert {s: set(keys) for s, keys in SOURCE_ENTITIES.items()} == readers
 
 
 def test_device_named_after_entry(mock_coordinator: Mock) -> None:

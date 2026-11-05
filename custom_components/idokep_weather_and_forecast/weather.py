@@ -12,11 +12,11 @@ from homeassistant.components.weather import (
     WeatherEntity,
 )
 from homeassistant.components.weather.const import WeatherEntityFeature
-from homeassistant.const import UnitOfPrecipitationDepth, UnitOfSpeed
+from homeassistant.const import UnitOfPrecipitationDepth, UnitOfPressure, UnitOfSpeed
 from homeassistant.core import callback
 from homeassistant.helpers import sun
 
-from .const import ATTRIBUTION, DOMAIN, LOCATION, MANUFACTURER
+from .const import ATTRIBUTION, DOMAIN, MANUFACTURER
 from .coordinator import CURRENT, HOURLY
 from .entity import IdokepEntity, device_name, forecast_page_url
 
@@ -55,7 +55,9 @@ class IdokepWeatherEntity(IdokepEntity, WeatherEntity):
 
     def __init__(self, coordinator: IdokepDataUpdateCoordinator) -> None:
         """Initialize the IdokepWeatherEntity with the given coordinator."""
-        # Current conditions; forecast page for hourly/daily forecast and wind
+        # Current conditions; forecast page for hourly/daily forecast and wind.
+        # The station maps' values are shown too, but those pages are fetched
+        # only for their own sensors.
         super().__init__(coordinator, frozenset({CURRENT, HOURLY}))
         # Main entity of the device: named just like the device
         # ("<name> Forecast"). The unique ID doesn't contain the settlement,
@@ -104,25 +106,47 @@ class IdokepWeatherEntity(IdokepEntity, WeatherEntity):
         return "°C"
 
     @property
+    def humidity(self) -> float | None:
+        """Return the average humidity of the settlement's stations (%)."""
+        return self.coordinator.data.get("humidity")
+
+    @property
+    def native_dew_point(self) -> float | None:
+        """Return the average dew point of the settlement's stations (°C)."""
+        return self.coordinator.data.get("dew_point")
+
+    @property
+    def native_pressure(self) -> float | None:
+        """Return the average sea-level pressure of the settlement's stations."""
+        return self.coordinator.data.get("pressure")
+
+    @property
+    def native_pressure_unit(self) -> str:
+        """Return the unit of the pressure."""
+        return UnitOfPressure.HPA
+
+    @property
+    def uv_index(self) -> float | None:
+        """Return the average UV index of the settlement's stations."""
+        return self.coordinator.data.get("uv_index")
+
+    @property
     def native_precipitation_unit(self) -> str:
         """Return the unit of the forecast and current-hour precipitation."""
         return UnitOfPrecipitationDepth.MILLIMETERS
 
     @property
-    def extra_state_attributes(self) -> dict[str, str | float]:
+    def extra_state_attributes(self) -> dict[str, float] | None:
         """
-        Return the settlement and the current hour's precipitation (mm).
+        Return the current hour's precipitation (mm).
 
-        HA's weather entity has no attributes for them; the Precipitation
+        HA's weather entity has no attribute for it; the Precipitation
         sensor has the same value.
         """
-        attributes: dict[str, str | float] = {
-            "settlement": self.coordinator.config_entry.data[LOCATION]
-        }
         precipitation = self.coordinator.data.get("precipitation")
-        if precipitation is not None:
-            attributes["precipitation"] = precipitation
-        return attributes
+        if precipitation is None:
+            return None
+        return {"precipitation": precipitation}
 
     @callback
     def _handle_coordinator_update(self) -> None:

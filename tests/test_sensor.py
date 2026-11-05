@@ -38,7 +38,7 @@ class TestIdokepSensorEntityDescriptions:
 
     def test_entity_descriptions_count(self) -> None:
         """Test that we have the expected number of entity descriptions."""
-        assert len(ENTITY_DESCRIPTIONS) == 10
+        assert len(ENTITY_DESCRIPTIONS) == 14
 
     def test_entity_descriptions_keys(self) -> None:
         """Test that entity descriptions have the expected keys."""
@@ -53,9 +53,32 @@ class TestIdokepSensorEntityDescriptions:
             "wind_speed",
             "precipitation",
             "precipitation_probability",
+            "humidity",
+            "dew_point",
+            "pressure",
+            "uv_index",
         }
         actual_keys = {desc.key for desc in ENTITY_DESCRIPTIONS}
         assert actual_keys == expected_keys
+
+    @pytest.mark.parametrize(
+        ("key", "device_class", "unit"),
+        [
+            ("humidity", SensorDeviceClass.HUMIDITY, "%"),
+            ("dew_point", SensorDeviceClass.TEMPERATURE, "°C"),
+            ("pressure", SensorDeviceClass.ATMOSPHERIC_PRESSURE, "hPa"),
+            ("uv_index", None, "UV index"),
+        ],
+    )
+    def test_station_map_descriptions(
+        self, key: str, device_class: SensorDeviceClass | None, unit: str
+    ) -> None:
+        """The values from the maps, shown with 1 decimal."""
+        desc = next(d for d in ENTITY_DESCRIPTIONS if d.key == key)
+        assert desc.device_class == device_class
+        assert desc.native_unit_of_measurement == unit
+        assert desc.suggested_display_precision == 1
+        assert desc.state_class is None
 
     def test_precipitation_description(self) -> None:
         """Millimetres with the precipitation device class, no state class."""

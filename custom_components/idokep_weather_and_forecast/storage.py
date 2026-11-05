@@ -7,7 +7,7 @@ only what is still valid:
 
 - forecasts: hours and days that have not passed yet
 - today's max/min: only if saved today
-- everything else (current temperature/condition, alerts, current wind):
+- everything else (current conditions, humidity, pressure, alerts, wind):
   only if fetched within MAX_AGE, since its age cannot be checked otherwise
 """
 
@@ -20,7 +20,14 @@ from typing import Any
 from homeassistant.util import dt as dt_util
 
 from .api import AlertData
-from .const import CURRENT, DOMAIN, HOURLY
+from .const import (
+    CURRENT,
+    DOMAIN,
+    HOURLY,
+    HUMIDITY_MAP,
+    PRESSURE_MAP,
+    UV_MAP,
+)
 
 STORAGE_VERSION = 1
 # Restored data older than this is only used where it can be checked by date
@@ -138,5 +145,8 @@ def _days_from(items: list[dict], today: date) -> list[dict]:
 
 _RESTORERS = {
     CURRENT: _restore_current,
+    HUMIDITY_MAP: _restore_current,
+    PRESSURE_MAP: _restore_current,
+    UV_MAP: _restore_current,
     HOURLY: _restore_forecast,
 }

@@ -22,6 +22,9 @@ LOCATION = "location"
 # Data sources, one per idokep.hu page
 CURRENT = "current"
 HOURLY = "hourly"
+HUMIDITY_MAP = "humidity_map"
+PRESSURE_MAP = "pressure_map"
+UV_MAP = "uv_map"
 
 # The national Radar service entry, created automatically next to the first
 # location entry. Its data is {ENTRY_TYPE: RADAR}; location entries have

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import datetime as dt
+import html
 import re
 import socket
 import unicodedata
@@ -51,6 +52,21 @@ class IdokepConfig:
     def get_hourly_forecast_url(cls, location: str) -> str:
         """Get hourly forecast URL for location."""
         return f"{cls.BASE_URL}/elorejelzes/{location}"
+
+    @classmethod
+    def get_humidity_url(cls) -> str:
+        """Get the humidity and dew point maps' URL (all stations)."""
+        return f"{cls.BASE_URL}/para"
+
+    @classmethod
+    def get_pressure_url(cls) -> str:
+        """Get the pressure map's URL (all stations)."""
+        return f"{cls.BASE_URL}/legnyomas"
+
+    @classmethod
+    def get_uv_url(cls) -> str:
+        """Get the UV map's URL (all stations)."""
+        return f"{cls.BASE_URL}/uv"
 
 
 # Exception classes remain the same
@@ -992,6 +1008,66 @@ def set_daily_probabilities(
         item["precipitation_probability"] = highest.get(item["datetime"])
 
 
+# One station on a map: the link holds its code ("#" if it has no page), the
+# tooltip starts with the value and the settlement's name, as either
+# Tip("<b>59%</b><br><b>Name</b>... or Tip("1029.2 hPa <b>Name</b>...
+_MAP_STATION = re.compile(
+    r"href='([^']*)'[^>]*?Tip\(\"\s*(?:<b>)?(-?\d+(?:\.\d+)?)[^<]*(?:</b><br>)?\s*<b>([^<]*)</b>"
+)
+
+
+def _clean_name(name: str) -> str:
+    """Return a name in a comparable form (the pages use non-breaking spaces)."""
+    return " ".join(html.unescape(name).split()).casefold()
+
+
+def _is_part_of(name: str, location: str) -> bool:
+    """Return True if a station's name is the settlement's, then a separator."""
+    return (
+        len(name) > len(location)
+        and name.startswith(location)
+        and not name[len(location)].isalnum()
+    )
+
+
+def _settlement_average(
+    stations: list[tuple[str, float]], location: str
+) -> float | None:
+    """
+    Return the average of a settlement's (name, value) stations.
+
+    Stations named exactly as the settlement count; if there are none, those
+    named after it (Budapest: "Budapest XI. ker"). None if it has no station.
+    """
+    wanted = _clean_name(location)
+    values = [value for name, value in stations if name == wanted] or [
+        value for name, value in stations if _is_part_of(name, wanted)
+    ]
+    return round(sum(values) / len(values), 2) if values else None
+
+
+def station_map_average(page: str, map_name: str, location: str) -> float | None:
+    """
+    Return the settlement's average on a map page (see _settlement_average).
+
+    The pages are large and only these tooltips are needed, so they are read
+    with a regular expression instead of being parsed as a whole.
+    """
+    start = page.find(f'<map name="{map_name}">')
+    if start < 0:
+        msg = f"Map {map_name} not found on the page"
+        raise IdokepApiClientCommunicationError(msg)
+    end = page.find("</map>", start)
+    section = page[start : end if end >= 0 else len(page)]
+
+    # A station can be listed twice on a map; one without a code has no page
+    stations: dict[tuple[str, str], tuple[str, float]] = {}
+    for code, value, name in _MAP_STATION.findall(section):
+        key = (code, "") if code != "#" else (code, name + value)
+        stations.setdefault(key, (_clean_name(name), float(value)))
+    return _settlement_average(list(stations.values()), location)
+
+
 class IdokepApiClient:
     """Időkép client: one fetch method per idokep.hu page."""
 
@@ -1009,6 +1085,37 @@ class IdokepApiClient:
         """Fetch and parse the current conditions page."""
         soup = await self._get_soup(IdokepConfig.get_current_weather_url(location))
         return self._current_parser.parse(soup)
+
+    async def async_get_humidity_map(self, location: str) -> dict[str, float | None]:
+        """
+        Fetch the settlement's humidity and dew point from /para.
+
+        Both are always in the result; None if the settlement has no station
+        on that map.
+        """
+        page = await self._http_client.get_html(IdokepConfig.get_humidity_url())
+        return {
+            "humidity": station_map_average(page, "rh", location),
+            "dew_point": station_map_average(page, "td", location),
+        }
+
+    async def async_get_pressure_map(self, location: str) -> dict[str, float | None]:
+        """
+        Fetch the settlement's pressure from /legnyomas.
+
+        Always in the result; None if the settlement has no station on the map.
+        """
+        page = await self._http_client.get_html(IdokepConfig.get_pressure_url())
+        return {"pressure": station_map_average(page, "legnyomasterkep", location)}
+
+    async def async_get_uv_map(self, location: str) -> dict[str, float | None]:
+        """
+        Fetch the settlement's UV index from /uv.
+
+        Always in the result; None if the settlement has no station on the map.
+        """
+        page = await self._http_client.get_html(IdokepConfig.get_uv_url())
+        return {"uv_index": station_map_average(page, "uv", location)}
 
     async def async_get_hourly_forecast(self, location: str) -> dict[str, Any]:
         """
@@ -1039,5 +1146,5 @@ class IdokepApiClient:
 
     async def _get_soup(self, url: str) -> BeautifulSoup:
         """Download a page and return it parsed."""
-        html = await self._http_client.get_html(url)
-        return BeautifulSoup(html, "html.parser")
+        page = await self._http_client.get_html(url)
+        return BeautifulSoup(page, "html.parser")

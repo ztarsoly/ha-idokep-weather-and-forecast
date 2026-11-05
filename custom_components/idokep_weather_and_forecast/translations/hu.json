@@ -112,6 +112,18 @@
             "precipitation_probability": {
                 "name": "Csapadék valószínűsége"
             },
+            "humidity": {
+                "name": "Páratartalom"
+            },
+            "dew_point": {
+                "name": "Harmatpont"
+            },
+            "pressure": {
+                "name": "Légnyomás"
+            },
+            "uv_index": {
+                "name": "UV-B index"
+            },
             "station_temperature": {
                 "name": "Hőmérséklet"
             },
