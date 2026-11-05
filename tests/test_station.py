@@ -484,7 +484,9 @@ def test_station_sensor_device_and_value() -> None:
     assert sensor.unique_id == "entry1_station_hom"
     device = sensor.device_info
     assert device["identifiers"] == {(DOMAIN, "entry1_station")}
-    assert device["name"] == "Debrecen-Józsa Weather"
+    assert "name" not in device
+    assert device["translation_key"] == "station"
+    assert device["translation_placeholders"] == {"name": "Debrecen-Józsa"}
     assert device["model"] == "Current weather"
     assert device["entry_type"] == DeviceEntryType.SERVICE
     assert device["configuration_url"] == "https://www.idokep.hu/automata/jozsamet"

@@ -30,6 +30,12 @@
         }
     },
     "device": {
+        "forecast": {
+            "name": "{name} Előrejelzés"
+        },
+        "station": {
+            "name": "{name} Időjárás"
+        },
         "national_radar": {
             "name": "Országos Radarkép"
         }

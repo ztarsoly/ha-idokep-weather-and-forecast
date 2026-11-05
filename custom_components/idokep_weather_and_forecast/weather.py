@@ -16,9 +16,9 @@ from homeassistant.const import UnitOfPrecipitationDepth, UnitOfPressure, UnitOf
 from homeassistant.core import callback
 from homeassistant.helpers import sun
 
-from .const import ATTRIBUTION, DOMAIN, MANUFACTURER
+from .const import ATTRIBUTION, DOMAIN, FORECAST_DEVICE, MANUFACTURER
 from .coordinator import CURRENT, HOURLY
-from .entity import IdokepEntity, device_name, forecast_page_url
+from .entity import IdokepEntity, device_name_fields, forecast_page_url
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -41,7 +41,7 @@ class IdokepWeatherEntity(IdokepEntity, WeatherEntity):
         """Return device information for the integration."""
         return {
             "identifiers": {(DOMAIN, self.coordinator.config_entry.entry_id)},
-            "name": device_name(self.coordinator.config_entry),
+            **device_name_fields(self.coordinator.config_entry, FORECAST_DEVICE),
             "manufacturer": MANUFACTURER,
             "model": "Weather forecast",
             "entry_type": "service",
@@ -59,9 +59,9 @@ class IdokepWeatherEntity(IdokepEntity, WeatherEntity):
         # The station maps' values are shown too, but those pages are fetched
         # only for their own sensors.
         super().__init__(coordinator, frozenset({CURRENT, HOURLY}))
-        # Main entity of the device: named just like the device
-        # ("<name> Forecast"). The unique ID doesn't contain the settlement,
-        # so it stays when the settlement is changed in Configure.
+        # Main entity of the device: named just like the device. The unique ID
+        # doesn't contain the settlement, so it stays when the settlement is
+        # changed in Configure.
         self._attr_name = None
         self._attr_unique_id = f"{coordinator.config_entry.entry_id}_weather"
         self._attr_supported_features = (

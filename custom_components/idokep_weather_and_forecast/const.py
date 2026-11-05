@@ -40,3 +40,6 @@ ENTRY_TYPE = "type"
 RADAR = "radar"
 RADAR_TITLE = "Radar"
 RADAR_UNIQUE_ID = "national_radar"
+# Keys of the translated device names
+FORECAST_DEVICE = "forecast"
+STATION_DEVICE = "station"

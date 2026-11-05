@@ -55,7 +55,8 @@ class TestIdokepWeatherEntity:
 
         expected_device_info = {
             "identifiers": {(DOMAIN, "test_entry_id")},
-            "name": "Budapest Forecast",
+            "translation_key": "forecast",
+            "translation_placeholders": {"name": "Budapest"},
             "manufacturer": "Időkép",
             "model": "Weather forecast",
             "entry_type": "service",

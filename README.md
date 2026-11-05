@@ -19,13 +19,13 @@ Az integráció az idokep.hu nyilvános oldalait olvassa (nincs hivatalos API, f
 
 ## Eszközök és entitások
 
-Minden felvett bejegyzéshez (településhez) az alábbiak jönnek létre. A `<Név>` a beállításkor megadott név.
+Minden felvett bejegyzéshez (településhez) az alábbiak jönnek létre. A `<Név>` a beállításkor megadott név. Az eszközök neve a Home Assistant nyelvét követi (angolul `<Név> Forecast`, `<Név> Weather`).
 
-### `<Név> Forecast` – Weather forecast
+### `<Név> Előrejelzés` – Weather forecast
 
 | Entitás | Típus | Megjegyzés |
 |---|---|---|
-| `<Név> Forecast` | időjárás | aktuális állapot, hőmérséklet, szél, páratartalom, harmatpont, légnyomás, UV-index, az aktuális óra csapadéka (`precipitation` attribútum, mm); óránkénti és napi előrejelzés |
+| `<Név> Előrejelzés` | időjárás | aktuális állapot, hőmérséklet, szél, páratartalom, harmatpont, légnyomás, UV-index, az aktuális óra csapadéka (`precipitation` attribútum, mm); óránkénti és napi előrejelzés |
 | Hőmérséklet | szenzor (°C) | aktuális |
 | Állapot | szenzor (felsorolás) | pl. napos, borult, eső |
 | Mai maximum hőmérséklet | szenzor (°C) | a napi előrejelzésből, éjfélig megmarad |
@@ -45,7 +45,7 @@ Minden felvett bejegyzéshez (településhez) az alábbiak jönnek létre. A `<N
 
 A páratartalom, a harmatpont, a légnyomás és az UV-B index „nem elérhető”, ha a településnek nincs ilyen értéket mérő állomása.
 
-### `<Név> Weather` – Current weather (csak állomáskóddal)
+### `<Név> Időjárás` – Current weather (csak állomáskóddal)
 
 Egy vagy több idokep.hu időjárás-állomás (automata) mért adatai, egy eszközben. Több állomásnál minden érték a választott **összevonás módja** szerint áll össze:
 
@@ -102,7 +102,7 @@ Az első bejegyzés felvételekor automatikusan létrejön egy **Radar** bejegyz
 
 | Mező | Kötelező | Leírás |
 |---|---|---|
-| Név | igen | A bejegyzés és az eszközök neve (pl. Otthon → „Otthon Forecast”, „Otthon Weather”) |
+| Név | igen | A bejegyzés és az eszközök neve (pl. Otthon → „Otthon Előrejelzés”, „Otthon Időjárás”) |
 | Település | igen | A település neve úgy, ahogy az idokep.hu címében szerepel, pl. `Budapest` vagy `Debrecen-Józsa` (`https://www.idokep.hu/idojaras/Debrecen-Józsa`) |
 | Időjárás-állomások kódjai | nem | Egy vagy több idokep.hu automata kódja fontossági sorrendben, pl. `jozsamet` (`https://www.idokep.hu/automata/jozsamet`) |
 | Összevonás módja | nem | Prioritás (alapértelmezett), Legfrissebb vagy Átlag – lásd fent |
@@ -117,7 +117,7 @@ Egy település csak egyszer vehető fel. Több települést külön bejegyzésk
 A bejegyzés **Beállítás** (Configure) gombjával módosítható:
 
 - **Település**: más településre vált; a bejegyzés és az eszközök neve, valamint az entitások azonosítói megmaradnak.
-- **Időjárás-állomások kódjai**: állomások hozzáadása, törlése vagy sorrendjük módosítása; mind törölve a `<Név> Weather` eszköz megszűnik.
+- **Időjárás-állomások kódjai**: állomások hozzáadása, törlése vagy sorrendjük módosítása; mind törölve a `<Név> Időjárás` eszköz megszűnik.
 - **Összevonás módja**: Prioritás, Legfrissebb vagy Átlag.
 - **Mérés maximális kora**: az ennél régebbi állomásmérés nem számít, percben.
 

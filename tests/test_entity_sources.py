@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
@@ -20,6 +22,7 @@ from custom_components.idokep_weather_and_forecast.coordinator import (
     SOURCE_ENTITIES,
     UV_MAP,
 )
+from custom_components.idokep_weather_and_forecast.const import DOMAIN
 from custom_components.idokep_weather_and_forecast.sensor import (
     ENTITY_DESCRIPTIONS as SENSOR_DESCRIPTIONS,
 )
@@ -87,9 +90,28 @@ def test_startup_list_matches_the_entities(mock_coordinator: Mock) -> None:
 
 
 def test_device_named_after_entry(mock_coordinator: Mock) -> None:
-    """All entities share one device named "<entry name> Forecast"."""
+    """All entities share one device, named from the entry's name."""
     sensor = IdokepSensor(mock_coordinator, SENSOR_DESCRIPTIONS[0])
     weather = IdokepWeatherEntity(mock_coordinator)
-    assert sensor.device_info["name"] == "Budapest Forecast"
-    assert weather.device_info["name"] == "Budapest Forecast"
+    for device in (sensor.device_info, weather.device_info):
+        assert "name" not in device
+        assert device["translation_key"] == "forecast"
+        assert device["translation_placeholders"] == {"name": "Budapest"}
     assert sensor.device_info["identifiers"] == weather.device_info["identifiers"]
+
+
+@pytest.mark.parametrize(
+    ("language", "forecast", "station"),
+    [
+        ("en", "Otthon Forecast", "Otthon Weather"),
+        ("hu", "Otthon Előrejelzés", "Otthon Időjárás"),
+    ],
+)
+def test_device_name_translations(language: str, forecast: str, station: str) -> None:
+    """The translations put the entry's name into the device names."""
+    component = Path(__file__).parent.parent / "custom_components" / DOMAIN
+    strings = json.loads(
+        (component / "translations" / f"{language}.json").read_text(encoding="utf-8")
+    )["device"]
+    assert strings["forecast"]["name"].format(name="Otthon") == forecast
+    assert strings["station"]["name"].format(name="Otthon") == station

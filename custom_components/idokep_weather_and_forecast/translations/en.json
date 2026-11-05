@@ -30,6 +30,12 @@
         }
     },
     "device": {
+        "forecast": {
+            "name": "{name} Forecast"
+        },
+        "station": {
+            "name": "{name} Weather"
+        },
         "national_radar": {
             "name": "National Radar Image"
         }
