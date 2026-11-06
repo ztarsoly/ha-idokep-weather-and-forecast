@@ -29,6 +29,10 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
+# Hourly forecast fields only used inside the integration: for the storm sensor
+# and for the Wind strength sensor
+INTERNAL_FIELDS = frozenset({"storm", "wind_strength"})
+
 
 class IdokepWeatherEntity(IdokepEntity, WeatherEntity):
     """Idokep Weather entity."""
@@ -162,9 +166,9 @@ class IdokepWeatherEntity(IdokepEntity, WeatherEntity):
         )
 
     async def async_forecast_hourly(self) -> list[Forecast]:
-        """Return the hourly forecast (without the internal storm mark)."""
+        """Return the hourly forecast (without the parser's internal fields)."""
         return [
-            {key: value for key, value in item.items() if key != "storm"}
+            {key: value for key, value in item.items() if key not in INTERNAL_FIELDS}
             for item in self.coordinator.data.get("hourly_forecast", [])
         ]
 

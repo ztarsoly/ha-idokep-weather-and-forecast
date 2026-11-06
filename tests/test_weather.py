@@ -242,12 +242,19 @@ class TestIdokepWeatherEntity:
         assert forecast == expected_forecast
 
     @pytest.mark.asyncio
-    async def test_async_forecast_hourly_hides_the_storm_mark(
+    async def test_async_forecast_hourly_hides_internal_fields(
         self, mock_coordinator: Mock
     ) -> None:
-        """The parser's internal mark isn't part of the forecast."""
+        """The parser's storm mark and wind strength aren't part of the forecast."""
         mock_coordinator.data = {
-            "hourly_forecast": [{"datetime": "x", "condition": "exceptional", "storm": True}]
+            "hourly_forecast": [
+                {
+                    "datetime": "x",
+                    "condition": "exceptional",
+                    "storm": True,
+                    "wind_strength": "gale",
+                }
+            ]
         }
         entity = IdokepWeatherEntity(mock_coordinator)
         assert await entity.async_forecast_hourly() == [
