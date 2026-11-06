@@ -42,6 +42,7 @@ SENSOR_SOURCES = {
     "wind_direction": HOURLY,
     "wind_strength": HOURLY,
     "wind_speed": HOURLY,
+    "wind_gust_speed": HOURLY,
     "precipitation": HOURLY,
     "precipitation_probability": HOURLY,
     "alert_level": HOURLY,

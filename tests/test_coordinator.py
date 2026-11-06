@@ -823,7 +823,8 @@ async def test_apparent_temperature_is_recalculated_at_every_update(
     """Each update uses the pages' latest values, even if only one page changed."""
     client.async_get_hourly_forecast.return_value = {
         **HOURLY_DATA,
-        "wind_speed": 18,
+        "wind_speed": 14,
+        "wind_gust_speed": 22,  # their mean is 18 km/h
     }
     client.async_get_current_weather.return_value = {"temperature": 20}
     client.async_get_humidity_map.return_value = {"humidity": 50.0, "dew_point": 9.0}
@@ -861,7 +862,7 @@ async def test_no_apparent_temperature_without_an_input(
     client.async_get_humidity_map.return_value = humidity
     client.async_get_hourly_forecast.return_value = {
         **HOURLY_DATA,
-        **({} if wind is None else {"wind_speed": wind}),
+        **({} if wind is None else {"wind_speed": wind, "wind_gust_speed": wind}),
     }
 
     data = await update_at(coordinator, local(2026, 10, 29, 12, 7))
@@ -883,3 +884,15 @@ async def test_apparent_temperature_sensor_keeps_its_pages_going(
     assert client.async_get_hourly_forecast.await_count == 2
     assert client.async_get_humidity_map.await_count == 2
     assert client.async_get_pressure_map.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_no_apparent_temperature_without_the_gust(
+    coordinator: IdokepDataUpdateCoordinator, client: Mock
+) -> None:
+    """Both wind values are needed for their mean."""
+    client.async_get_hourly_forecast.return_value = {**HOURLY_DATA, "wind_speed": 20}
+
+    data = await update_at(coordinator, local(2026, 10, 29, 12, 7))
+
+    assert "apparent_temperature" not in data

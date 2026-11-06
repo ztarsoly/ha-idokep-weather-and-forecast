@@ -106,6 +106,7 @@ def _restore_forecast(
             "wind_bearing",
             "wind_strength",
             "wind_speed",
+            "wind_gust_speed",
             "precipitation",
             "precipitation_probability",
             "storm_expected",

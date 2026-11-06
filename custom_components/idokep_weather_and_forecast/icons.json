@@ -41,6 +41,9 @@
       "station_precipitation_24h": {
         "default": "mdi:weather-rainy"
       },
+      "wind_gust_speed": {
+        "default": "mdi:weather-windy-variant"
+      },
       "station_wind_gust": {
         "default": "mdi:weather-windy-variant"
       },

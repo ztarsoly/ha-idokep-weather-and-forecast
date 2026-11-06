@@ -114,6 +114,9 @@
             "wind_speed": {
                 "name": "Wind speed"
             },
+            "wind_gust_speed": {
+                "name": "Wind gust"
+            },
             "precipitation": {
                 "name": "Precipitation"
             },

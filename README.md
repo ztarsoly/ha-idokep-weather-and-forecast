@@ -10,7 +10,7 @@ Az integráció az idokep.hu nyilvános oldalait olvassa (nincs hivatalos API, f
 ## Funkciók
 
 - **Időjárás entitás** óránkénti és napi (kb. 23 napos) előrejelzéssel, a Home Assistant új forecast API-jával
-- **Előrejelzési szenzorok**: hőmérséklet, állapot, mai maximum/minimum, szélirány, szélerősség, becsült szélsebesség, csapadék, csapadék valószínűsége, valamint a település állomásainak átlagából páratartalom, harmatpont, légnyomás és UV-index, és ezekből számított hőérzet
+- **Előrejelzési szenzorok**: hőmérséklet, állapot, mai maximum/minimum, szélirány, szélerősség, becsült szélsebesség és széllökés, csapadék, csapadék valószínűsége, valamint a település állomásainak átlagából páratartalom, harmatpont, légnyomás és UV-index, és ezekből számított hőérzet
 - **Riasztások**: riasztási szint 24 órán belül (nincs, sárga, narancs, piros) és vihar egy órán belül
 - **Időjárás-állomások** (nem kötelező): egy vagy több idokep.hu automata 12 mért adata egy eszközben összevonva, belőlük számított értékek (harmatpont, hőérzet, nedves hőmérséklet, abszolút páratartalom, páranyomás, páranyomás-hiány, felhőalap) és a mérés ideje
 - **Országos radar**: animált GIF az utolsó 5 radarképből, külön szolgáltatásként
@@ -25,7 +25,7 @@ Minden felvett bejegyzéshez (településhez) az alábbiak jönnek létre. A `<N
 
 | Entitás | Típus | Megjegyzés |
 |---|---|---|
-| `<Név> Előrejelzés` | időjárás | aktuális állapot, hőmérséklet, szél, páratartalom, harmatpont, hőérzet, légnyomás, UV-index, az aktuális óra csapadéka (`precipitation` attribútum, mm); óránkénti és napi előrejelzés |
+| `<Név> Előrejelzés` | időjárás | aktuális állapot, hőmérséklet, szél, becsült széllökés (a Beaufort-fokozat felső határa), páratartalom, harmatpont, hőérzet, légnyomás, UV-index, az aktuális óra csapadéka (`precipitation` attribútum, mm); óránkénti és napi előrejelzés |
 | Hőmérséklet | szenzor (°C) | aktuális |
 | Állapot | szenzor (felsorolás) | pl. napos, borult, eső |
 | Mai maximum hőmérséklet | szenzor (°C) | a napi előrejelzésből, éjfélig megmarad |
@@ -33,12 +33,13 @@ Minden felvett bejegyzéshez (településhez) az alábbiak jönnek létre. A `<N
 | Szélirány (fok) | szenzor (°) | az aktuális óra előrejelzéséből |
 | Szélirány (égtáj) | szenzor (felsorolás) | 16 égtáj (É, ÉÉK, ÉK, …) |
 | Szélerősség | szenzor (felsorolás) | Beaufort-skála 0–12 (Szélcsend … Orkán) |
-| Szélsebesség | szenzor (km/h) | **becslés** a szélerősségből (az idokep.hu nem ad számot) |
+| Szélsebesség | szenzor (km/h) | **becslés**: a szélerősség Beaufort-fokozatának alsó határa (az idokep.hu nem ad számot) |
+| Széllökés | szenzor (km/h) | **becslés**: a szélerősség Beaufort-fokozatának felső határa |
 | Csapadék | szenzor (mm) | az aktuális óra csapadéka az előrejelzésből (egész mm) |
 | Csapadék valószínűsége | szenzor (%) | az aktuális óra előrejelzéséből; 0, ha az oldal nem mutat értéket |
 | Páratartalom | szenzor (%) | a település állomásainak átlaga a páratartalom-térképről (`/para`) |
 | Harmatpont | szenzor (°C) | a település állomásainak átlaga a harmatpont-térképről (`/para`) |
-| Hőérzet | szenzor (°C) | számított a hőmérsékletből, a páratartalomból és a **becsült** szélsebességből (Steadman-képlet, napsugárzás nélkül), minden frissítéskor |
+| Hőérzet | szenzor (°C) | számított a hőmérsékletből, a páratartalomból és a **becsült** szélsebesség és széllökés átlagából (Steadman-képlet, napsugárzás nélkül), minden frissítéskor |
 | Légnyomás | szenzor (hPa) | a település állomásainak átlaga a légnyomástérképről (`/legnyomas`), tengerszintre átszámítva |
 | UV-B index | szenzor | a település állomásainak átlaga az UV-térképről (`/uv`); kevés állomás méri |
 | Riasztási szint 24 órán belül | szenzor (felsorolás) | a legmagasabb szint az oldal figyelmeztető sávjából és az első 24 órás kártya riasztásaiból: Nincs riasztás, Sárga, Narancs, Piros |
@@ -146,7 +147,7 @@ Az előrejelzési oldalak és az állomástérképek legutóbbi sikeres adatai a
 
 ## Megjegyzések
 
-- A szélsebesség-szenzor a Beaufort-fokozat középértékéből számolt **becslés**; valódi mért szélsebességet az időjárás-állomás ad.
+- A szélsebesség a Beaufort-fokozat alsó, a széllökés a felső határa, tehát mindkettő **becslés**; a valódi széllökés ennél lényegesen nagyobb is lehet. Mért értékeket az időjárás-állomás ad.
 - Este, amikor az idokep.hu már nem mutatja a mai napot, a mai napi előrejelzés és a mai max/min éjfélig megmarad.
 - Az idokep.hu az óránkénti előrejelzést a következő órától listázza; az aktuális óra egy korábbi lekérdezésből megmarad, így az előrejelzés az aktuális órával kezdődik (közvetlenül az első telepítés után még a következő órával).
 - Az állomásadatok az idokep.hu grafikonjai mögötti adatfájlból származnak, ami nem hivatalos felület, és megváltozhat.

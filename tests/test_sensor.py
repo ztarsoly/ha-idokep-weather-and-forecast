@@ -38,7 +38,7 @@ class TestIdokepSensorEntityDescriptions:
 
     def test_entity_descriptions_count(self) -> None:
         """Test that we have the expected number of entity descriptions."""
-        assert len(ENTITY_DESCRIPTIONS) == 16
+        assert len(ENTITY_DESCRIPTIONS) == 17
 
     def test_entity_descriptions_keys(self) -> None:
         """Test that entity descriptions have the expected keys."""
@@ -59,6 +59,7 @@ class TestIdokepSensorEntityDescriptions:
             "uv_index",
             "alert_level",
             "apparent_temperature",
+            "wind_gust_speed",
         }
         actual_keys = {desc.key for desc in ENTITY_DESCRIPTIONS}
         assert actual_keys == expected_keys
@@ -69,6 +70,7 @@ class TestIdokepSensorEntityDescriptions:
             ("humidity", SensorDeviceClass.HUMIDITY, "%"),
             ("dew_point", SensorDeviceClass.TEMPERATURE, "°C"),
             ("apparent_temperature", SensorDeviceClass.TEMPERATURE, "°C"),
+            ("wind_gust_speed", SensorDeviceClass.WIND_SPEED, "km/h"),
             ("pressure", SensorDeviceClass.ATMOSPHERIC_PRESSURE, "hPa"),
             ("uv_index", None, "UV index"),
         ],
@@ -133,6 +135,18 @@ class TestIdokepSensorEntityDescriptions:
         mock_coordinator.data = {key: 12.5}
         mock_coordinator.last_update_success = False
         assert not IdokepSensor(mock_coordinator, desc).available
+
+    def test_wind_gust_sensor_shows_the_estimate(self, mock_coordinator: Mock) -> None:
+        """The value is the parser's gust; without one it is unknown, not unavailable."""
+        desc = next(d for d in ENTITY_DESCRIPTIONS if d.key == "wind_gust_speed")
+        mock_coordinator.last_update_success = True
+        mock_coordinator.data = {"wind_gust_speed": 28}
+        assert IdokepSensor(mock_coordinator, desc).native_value == 28
+
+        mock_coordinator.data = {}
+        sensor = IdokepSensor(mock_coordinator, desc)
+        assert sensor.native_value is None
+        assert sensor.available
 
     def test_other_sensors_stay_available_without_value(
         self, mock_coordinator: Mock

@@ -140,26 +140,43 @@ class WindStrengthMapper:
     Maps idokep.hu wind strength words to Beaufort-scale levels.
 
     idokep.hu gives no wind speed, only a strength word ("Mérsékelt északi
-    szél", class "mersekelt"). The estimated speed of a level is the middle of
-    its Beaufort range in km/h (hurricane: its lower limit). Only "gyenge",
+    szél", class "mersekelt"). The estimated wind speed of a level is the lower
+    end of its Beaufort range in km/h, the estimated gust is the upper end
+    (hurricane has no upper end, so both are its lower limit). Only "gyenge",
     "mersekelt" and "elenk" have been seen on the site so far; the other words
     follow the Hungarian Beaufort names.
     """
 
-    # Level code: estimated speed in km/h, calm to hurricane (Beaufort 0-12)
+    # Level code: lower end of its range in km/h, calm to hurricane (Beaufort 0-12)
     SPEEDS: ClassVar[dict[str, int]] = {
         "calm": 0,
-        "light_air": 3,
-        "light_breeze": 9,
-        "gentle_breeze": 16,
-        "moderate_breeze": 24,
-        "fresh_breeze": 34,
-        "strong_breeze": 44,
-        "near_gale": 56,
-        "gale": 68,
-        "strong_gale": 82,
-        "storm": 96,
-        "violent_storm": 110,
+        "light_air": 1,
+        "light_breeze": 6,
+        "gentle_breeze": 12,
+        "moderate_breeze": 20,
+        "fresh_breeze": 29,
+        "strong_breeze": 39,
+        "near_gale": 50,
+        "gale": 62,
+        "strong_gale": 75,
+        "storm": 89,
+        "violent_storm": 103,
+        "hurricane": 118,
+    }
+    # Level code: upper end of its range in km/h
+    GUSTS: ClassVar[dict[str, int]] = {
+        "calm": 1,
+        "light_air": 5,
+        "light_breeze": 11,
+        "gentle_breeze": 19,
+        "moderate_breeze": 28,
+        "fresh_breeze": 38,
+        "strong_breeze": 49,
+        "near_gale": 61,
+        "gale": 74,
+        "strong_gale": 88,
+        "storm": 102,
+        "violent_storm": 117,
         "hurricane": 118,
     }
 
@@ -551,6 +568,7 @@ class HourlyForecastParser(WeatherParser):
                 ("wind_bearing", "wind_bearing"),
                 ("wind_strength", "wind_strength"),
                 ("native_wind_speed", "wind_speed"),
+                ("native_wind_gust_speed", "wind_gust_speed"),
                 ("precipitation", "precipitation"),
                 ("precipitation_probability", "precipitation_probability"),
             ):
@@ -654,8 +672,9 @@ class HourlyForecastParser(WeatherParser):
                 "precipitation_probability": precipitation_probability,
                 "wind_bearing": self.extract_wind_bearing(card),
                 "wind_strength": strength,
-                # Estimate from the strength (km/h); the site gives no speed
+                # Estimates from the strength (km/h); the site gives no speed
                 "native_wind_speed": WindStrengthMapper.SPEEDS.get(strength or ""),
+                "native_wind_gust_speed": WindStrengthMapper.GUSTS.get(strength or ""),
             }
         except (ValueError, IndexError):
             return None

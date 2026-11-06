@@ -154,6 +154,14 @@ ENTITY_DESCRIPTIONS = (
         device_class=SensorDeviceClass.WIND_SPEED,
     ),
     # The current hour's amount: its share of the day's total (by rain bar)
+    # Estimated: the upper end of the wind strength's Beaufort range
+    SensorEntityDescription(
+        key="wind_gust_speed",
+        translation_key="wind_gust_speed",
+        native_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
+        suggested_display_precision=DISPLAY_PRECISION,
+        device_class=SensorDeviceClass.WIND_SPEED,
+    ),
     SensorEntityDescription(
         key="precipitation",
         translation_key="precipitation",
@@ -190,7 +198,8 @@ ENTITY_DESCRIPTIONS = (
         suggested_display_precision=DISPLAY_PRECISION,
         device_class=SensorDeviceClass.TEMPERATURE,
     ),
-    # Calculated from the temperature, humidity and estimated wind speed above
+    # Calculated from the temperature, humidity and the mean of the estimated
+    # wind speed and gust
     SensorEntityDescription(
         key="apparent_temperature",
         translation_key="apparent_temperature",

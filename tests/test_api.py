@@ -1073,12 +1073,14 @@ class TestHourlyParserBranches:
             result = parser.parse(BeautifulSoup(html, "html.parser"))
 
         bearings = [item["wind_bearing"] for item in result["hourly_forecast"]]
-        # Both cards say "mersekelt": moderate breeze, estimated 24 km/h
+        # Both cards say "mersekelt": moderate breeze, 20-28 km/h
         assert result["wind_strength"] == "moderate_breeze"
-        assert result["wind_speed"] == 24
+        assert result["wind_speed"] == 20
+        assert result["wind_gust_speed"] == 28
         for item in result["hourly_forecast"]:
             assert item["wind_strength"] == "moderate_breeze"
-            assert item["native_wind_speed"] == 24
+            assert item["native_wind_speed"] == 20
+            assert item["native_wind_gust_speed"] == 28
         assert bearings == [6, 200]
         assert result["wind_bearing"] == 6
 
@@ -1776,26 +1778,6 @@ class TestWindStrength:
         """Tooltips: the longest matching word wins ("Erős vihar" vs "Erős")."""
         assert WindStrengthMapper.from_text(tooltip) == level
 
-    def test_speeds_follow_beaufort_midpoints(self) -> None:
-        """Estimates: middle of each Beaufort range in km/h."""
-        speeds = WindStrengthMapper.SPEEDS
-        assert list(speeds.values()) == [
-            0,
-            3,
-            9,
-            16,
-            24,
-            34,
-            44,
-            56,
-            68,
-            82,
-            96,
-            110,
-            118,
-        ]
-        assert WindStrengthMapper.levels() == list(speeds)
-
     def _card(self, wind_class: str, tooltip: str) -> Tag:
         html = f"""
         <div class="ik wide-hourly-forecast-card">
@@ -2240,3 +2222,37 @@ def test_alerts_of_the_first_24_cards_count(alert_hour: int, counted: bool) -> N
     """An alert on a card after the first 24 is left out."""
     result = AlertParser().parse(_alert_cards(alert_hour))
     assert bool(result["alerts_by_level"]["red"]) is counted
+
+
+def test_wind_speed_and_gust_are_the_ends_of_each_level() -> None:
+    """Speed: the Beaufort range's lower end; gust: its upper end."""
+    assert WindStrengthMapper.SPEEDS == {
+        "calm": 0,
+        "light_air": 1,
+        "light_breeze": 6,
+        "gentle_breeze": 12,
+        "moderate_breeze": 20,
+        "fresh_breeze": 29,
+        "strong_breeze": 39,
+        "near_gale": 50,
+        "gale": 62,
+        "strong_gale": 75,
+        "storm": 89,
+        "violent_storm": 103,
+        "hurricane": 118,
+    }
+    assert WindStrengthMapper.GUSTS == {
+        "calm": 1,
+        "light_air": 5,
+        "light_breeze": 11,
+        "gentle_breeze": 19,
+        "moderate_breeze": 28,
+        "fresh_breeze": 38,
+        "strong_breeze": 49,
+        "near_gale": 61,
+        "gale": 74,
+        "strong_gale": 88,
+        "storm": 102,
+        "violent_storm": 117,
+        "hurricane": 118,  # the scale has no upper end
+    }

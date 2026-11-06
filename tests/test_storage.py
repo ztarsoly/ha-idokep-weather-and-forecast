@@ -39,7 +39,8 @@ FORECAST_DATA = {
     ],
     "wind_bearing": 12,
     "wind_strength": "moderate_breeze",
-    "wind_speed": 24,
+    "wind_speed": 20,
+    "wind_gust_speed": 28,
     "precipitation": 0.81,
     "precipitation_probability": 25,
     "alerts": [AlertData(level="yellow", type="wind", description="Szél")],
@@ -117,7 +118,8 @@ class TestRestoreForecast:
         ]
         assert result["wind_bearing"] == 12
         assert result["wind_strength"] == "moderate_breeze"
-        assert result["wind_speed"] == 24
+        assert result["wind_speed"] == 20
+        assert result["wind_gust_speed"] == 28
         assert result["precipitation"] == 0.81
         assert result["precipitation_probability"] == 25
         assert result["alerts"] == FORECAST_DATA["alerts"]

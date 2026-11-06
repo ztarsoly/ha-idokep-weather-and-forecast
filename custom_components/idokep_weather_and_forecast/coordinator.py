@@ -52,6 +52,7 @@ SOURCE_ENTITIES = {
         "temperature_min_today",
         "wind_bearing",
         "wind_direction",
+        "wind_gust_speed",
         "wind_strength",
         "wind_speed",
         "precipitation",
@@ -340,11 +341,13 @@ class IdokepDataUpdateCoordinator(DataUpdateCoordinator):
         for source in self.schedules:
             data.update(self._source_data[source])
         # Recalculated at every update, from the pages' latest values
-        feels_like = apparent_temperature(
-            data.get("temperature"), data.get("humidity"), data.get("wind_speed")
-        )
-        if feels_like is not None:
-            data["apparent_temperature"] = feels_like
+        speed, gust = data.get("wind_speed"), data.get("wind_gust_speed")
+        if speed is not None and gust is not None:
+            feels_like = apparent_temperature(
+                data.get("temperature"), data.get("humidity"), (speed + gust) / 2
+            )
+            if feels_like is not None:
+                data["apparent_temperature"] = feels_like
 
         if not data:
             msg = f"No weather data found for location: {location}"

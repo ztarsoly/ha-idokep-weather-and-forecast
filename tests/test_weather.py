@@ -175,6 +175,14 @@ class TestIdokepWeatherEntity:
         assert entity.native_pressure == 1029.2
         assert entity.native_pressure_unit == "hPa"
 
+    def test_wind_gust(self, mock_coordinator: Mock) -> None:
+        """The estimated gust is the standard wind_gust_speed attribute."""
+        mock_coordinator.data = {"wind_gust_speed": 28}
+        assert IdokepWeatherEntity(mock_coordinator).native_wind_gust_speed == 28
+
+        mock_coordinator.data = {}
+        assert IdokepWeatherEntity(mock_coordinator).native_wind_gust_speed is None
+
     def test_apparent_temperature(self, mock_coordinator: Mock) -> None:
         """The sensor's value is passed to the standard attribute."""
         mock_coordinator.data = {**mock_coordinator.data, "apparent_temperature": 16.35}

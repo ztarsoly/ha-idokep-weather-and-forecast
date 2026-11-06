@@ -114,6 +114,9 @@
             "wind_speed": {
                 "name": "Szélsebesség"
             },
+            "wind_gust_speed": {
+                "name": "Széllökés"
+            },
             "precipitation": {
                 "name": "Csapadék"
             },
