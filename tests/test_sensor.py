@@ -38,7 +38,7 @@ class TestIdokepSensorEntityDescriptions:
 
     def test_entity_descriptions_count(self) -> None:
         """Test that we have the expected number of entity descriptions."""
-        assert len(ENTITY_DESCRIPTIONS) == 15
+        assert len(ENTITY_DESCRIPTIONS) == 16
 
     def test_entity_descriptions_keys(self) -> None:
         """Test that entity descriptions have the expected keys."""
@@ -58,6 +58,7 @@ class TestIdokepSensorEntityDescriptions:
             "pressure",
             "uv_index",
             "alert_level",
+            "apparent_temperature",
         }
         actual_keys = {desc.key for desc in ENTITY_DESCRIPTIONS}
         assert actual_keys == expected_keys
@@ -67,6 +68,7 @@ class TestIdokepSensorEntityDescriptions:
         [
             ("humidity", SensorDeviceClass.HUMIDITY, "%"),
             ("dew_point", SensorDeviceClass.TEMPERATURE, "°C"),
+            ("apparent_temperature", SensorDeviceClass.TEMPERATURE, "°C"),
             ("pressure", SensorDeviceClass.ATMOSPHERIC_PRESSURE, "hPa"),
             ("uv_index", None, "UV index"),
         ],
@@ -106,7 +108,9 @@ class TestIdokepSensorEntityDescriptions:
         assert sensor.native_value == expected
         assert sensor.extra_state_attributes is None
 
-    @pytest.mark.parametrize("key", ["humidity", "dew_point", "pressure", "uv_index"])
+    @pytest.mark.parametrize(
+        "key", ["humidity", "dew_point", "apparent_temperature", "pressure", "uv_index"]
+    )
     def test_map_sensor_unavailable_without_value(
         self, mock_coordinator: Mock, key: str
     ) -> None:

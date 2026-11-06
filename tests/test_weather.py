@@ -175,6 +175,15 @@ class TestIdokepWeatherEntity:
         assert entity.native_pressure == 1029.2
         assert entity.native_pressure_unit == "hPa"
 
+    def test_apparent_temperature(self, mock_coordinator: Mock) -> None:
+        """The sensor's value is passed to the standard attribute."""
+        mock_coordinator.data = {**mock_coordinator.data, "apparent_temperature": 16.35}
+        entity = IdokepWeatherEntity(mock_coordinator)
+        assert entity.native_apparent_temperature == 16.35
+
+        mock_coordinator.data = {}
+        assert IdokepWeatherEntity(mock_coordinator).native_apparent_temperature is None
+
     def test_station_map_values_missing(self, mock_coordinator: Mock) -> None:
         """A settlement without stations has none of them."""
         mock_coordinator.data = {**mock_coordinator.data, "humidity": None}

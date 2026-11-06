@@ -135,6 +135,9 @@
             "dew_point": {
                 "name": "Harmatpont"
             },
+            "apparent_temperature": {
+                "name": "Hőérzet"
+            },
             "pressure": {
                 "name": "Légnyomás"
             },

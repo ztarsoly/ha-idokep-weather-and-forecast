@@ -45,6 +45,7 @@ SENSOR_SOURCES = {
     "precipitation": HOURLY,
     "precipitation_probability": HOURLY,
     "alert_level": HOURLY,
+    "apparent_temperature": {CURRENT, HOURLY, HUMIDITY_MAP},
     "humidity": HUMIDITY_MAP,
     "dew_point": HUMIDITY_MAP,
     "pressure": PRESSURE_MAP,
@@ -56,7 +57,9 @@ SENSOR_SOURCES = {
 def test_sensor_sources(mock_coordinator: Mock, description: object) -> None:
     """Sensors listen for the page their value is parsed from."""
     sensor = IdokepSensor(mock_coordinator, description)
-    assert sensor.coordinator_context == frozenset({SENSOR_SOURCES[description.key]})
+    sources = SENSOR_SOURCES[description.key]
+    expected = sources if isinstance(sources, set) else {sources}
+    assert sensor.coordinator_context == frozenset(expected)
 
 
 @pytest.mark.parametrize("description", BINARY_SENSOR_DESCRIPTIONS, ids=lambda d: d.key)
@@ -85,7 +88,6 @@ def test_startup_list_matches_the_entities(mock_coordinator: Mock) -> None:
         for source in entity.coordinator_context:
             readers.setdefault(source, set()).add(entity.unique_id.removeprefix(prefix))
 
-    assert readers.pop(CURRENT)  # always fetched at startup, so not listed
     assert {s: set(keys) for s, keys in SOURCE_ENTITIES.items()} == readers
 
 

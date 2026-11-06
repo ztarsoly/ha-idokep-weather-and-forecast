@@ -10,7 +10,7 @@ Az integráció az idokep.hu nyilvános oldalait olvassa (nincs hivatalos API, f
 ## Funkciók
 
 - **Időjárás entitás** óránkénti és napi (kb. 23 napos) előrejelzéssel, a Home Assistant új forecast API-jával
-- **Előrejelzési szenzorok**: hőmérséklet, állapot, mai maximum/minimum, szélirány, szélerősség, becsült szélsebesség, csapadék, csapadék valószínűsége, valamint a település állomásainak átlagából páratartalom, harmatpont, légnyomás és UV-index
+- **Előrejelzési szenzorok**: hőmérséklet, állapot, mai maximum/minimum, szélirány, szélerősség, becsült szélsebesség, csapadék, csapadék valószínűsége, valamint a település állomásainak átlagából páratartalom, harmatpont, légnyomás és UV-index, és ezekből számított hőérzet
 - **Riasztások**: riasztási szint 24 órán belül (nincs, sárga, narancs, piros) és vihar egy órán belül
 - **Időjárás-állomások** (nem kötelező): egy vagy több idokep.hu automata 12 mért adata egy eszközben összevonva, belőlük számított értékek (harmatpont, hőérzet, nedves hőmérséklet, abszolút páratartalom, páranyomás, páranyomás-hiány, felhőalap) és a mérés ideje
 - **Országos radar**: animált GIF az utolsó 5 radarképből, külön szolgáltatásként
@@ -25,7 +25,7 @@ Minden felvett bejegyzéshez (településhez) az alábbiak jönnek létre. A `<N
 
 | Entitás | Típus | Megjegyzés |
 |---|---|---|
-| `<Név> Előrejelzés` | időjárás | aktuális állapot, hőmérséklet, szél, páratartalom, harmatpont, légnyomás, UV-index, az aktuális óra csapadéka (`precipitation` attribútum, mm); óránkénti és napi előrejelzés |
+| `<Név> Előrejelzés` | időjárás | aktuális állapot, hőmérséklet, szél, páratartalom, harmatpont, hőérzet, légnyomás, UV-index, az aktuális óra csapadéka (`precipitation` attribútum, mm); óránkénti és napi előrejelzés |
 | Hőmérséklet | szenzor (°C) | aktuális |
 | Állapot | szenzor (felsorolás) | pl. napos, borult, eső |
 | Mai maximum hőmérséklet | szenzor (°C) | a napi előrejelzésből, éjfélig megmarad |
@@ -38,12 +38,13 @@ Minden felvett bejegyzéshez (településhez) az alábbiak jönnek létre. A `<N
 | Csapadék valószínűsége | szenzor (%) | az aktuális óra előrejelzéséből; 0, ha az oldal nem mutat értéket |
 | Páratartalom | szenzor (%) | a település állomásainak átlaga a páratartalom-térképről (`/para`) |
 | Harmatpont | szenzor (°C) | a település állomásainak átlaga a harmatpont-térképről (`/para`) |
+| Hőérzet | szenzor (°C) | számított a hőmérsékletből, a páratartalomból és a **becsült** szélsebességből (Steadman-képlet, napsugárzás nélkül), minden frissítéskor |
 | Légnyomás | szenzor (hPa) | a település állomásainak átlaga a légnyomástérképről (`/legnyomas`), tengerszintre átszámítva |
 | UV-B index | szenzor | a település állomásainak átlaga az UV-térképről (`/uv`); kevés állomás méri |
 | Riasztási szint 24 órán belül | szenzor (felsorolás) | a legmagasabb szint az oldal figyelmeztető sávjából és az első 24 órás kártya riasztásaiból: Nincs riasztás, Sárga, Narancs, Piros |
 | Vihar várható egy órán belül | bináris szenzor | bekapcsol, ha az aktuális vagy a következő óra viharos (zivatar, száraz zivatar, villámlás, eső viharos széllel, porvihar); az oldal óránkénti letöltésekor frissül |
 
-A páratartalom, a harmatpont, a légnyomás és az UV-B index „nem elérhető”, ha a településnek nincs ilyen értéket mérő állomása.
+A páratartalom, a harmatpont, a hőérzet, a légnyomás és az UV-B index „nem elérhető”, ha a településnek nincs ilyen értéket mérő állomása.
 
 ### `<Név> Időjárás` – Current weather (csak állomáskóddal)
 

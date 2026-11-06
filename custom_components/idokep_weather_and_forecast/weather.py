@@ -96,6 +96,11 @@ class IdokepWeatherEntity(IdokepEntity, WeatherEntity):
         return self.coordinator.data.get("wind_speed")
 
     @property
+    def native_apparent_temperature(self) -> float | None:
+        """Return the temperature it feels like, from the sensor's calculation."""
+        return self.coordinator.data.get("apparent_temperature")
+
+    @property
     def native_wind_speed_unit(self) -> str:
         """Return the unit of the (estimated) wind speed."""
         return UnitOfSpeed.KILOMETERS_PER_HOUR

@@ -718,7 +718,7 @@ async def test_startup_skips_a_page_with_all_entities_disabled(
     """A restart doesn't fetch a page whose entities are all disabled."""
     coordinator.config_entry.entry_id = "entry1"
     registered_entities.extend(
-        _registered("entry1", ("humidity", "dew_point"), disabled=True)
+        _registered("entry1", SOURCE_ENTITIES[HUMIDITY_MAP], disabled=True)
     )
 
     data = await update_at(coordinator, local(2026, 10, 29, 12, 7))
@@ -814,3 +814,72 @@ async def test_restored_values_of_a_disabled_page_are_dropped(
     data = await update_at(coordinator, local(2026, 10, 29, 12, 7))
 
     assert "pressure" not in data
+
+
+@pytest.mark.asyncio
+async def test_apparent_temperature_is_recalculated_at_every_update(
+    coordinator: IdokepDataUpdateCoordinator, client: Mock
+) -> None:
+    """Each update uses the pages' latest values, even if only one page changed."""
+    client.async_get_hourly_forecast.return_value = {
+        **HOURLY_DATA,
+        "wind_speed": 18,
+    }
+    client.async_get_current_weather.return_value = {"temperature": 20}
+    client.async_get_humidity_map.return_value = {"humidity": 50.0, "dew_point": 9.0}
+
+    data = await update_at(coordinator, local(2026, 10, 29, 12, 7))
+    assert data["apparent_temperature"] == 16.35
+
+    # 12:10: only the 10-minute pages are due, the wind speed stays
+    client.async_get_current_weather.return_value = {"temperature": 25}
+    coordinator.data = data
+    listen(coordinator, CURRENT, HOURLY, HUMIDITY_MAP)
+    data = await update_at(coordinator, local(2026, 10, 29, 12, 10))
+
+    assert client.async_get_hourly_forecast.await_count == 1
+    assert data["apparent_temperature"] > 16.35
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("current", "humidity", "wind"),
+    [
+        ({"temperature": 20}, {"humidity": None, "dew_point": None}, 18),
+        ({"temperature": 20}, {"humidity": 50.0, "dew_point": 9.0}, None),
+    ],
+)
+async def test_no_apparent_temperature_without_an_input(
+    coordinator: IdokepDataUpdateCoordinator,
+    client: Mock,
+    current: dict,
+    humidity: dict,
+    wind: int | None,
+) -> None:
+    """Without humidity or wind speed there is no value (the sensor is unavailable)."""
+    client.async_get_current_weather.return_value = current
+    client.async_get_humidity_map.return_value = humidity
+    client.async_get_hourly_forecast.return_value = {
+        **HOURLY_DATA,
+        **({} if wind is None else {"wind_speed": wind}),
+    }
+
+    data = await update_at(coordinator, local(2026, 10, 29, 12, 7))
+
+    assert "apparent_temperature" not in data
+
+
+@pytest.mark.asyncio
+async def test_apparent_temperature_sensor_keeps_its_pages_going(
+    coordinator: IdokepDataUpdateCoordinator, client: Mock
+) -> None:
+    """With only this sensor enabled, all three of its pages are still fetched."""
+    coordinator.data = await update_at(coordinator, local(2026, 10, 29, 12, 7))
+    listen(coordinator, CURRENT, HOURLY, HUMIDITY_MAP)
+
+    await update_at(coordinator, local(2026, 10, 29, 13, 0))
+
+    assert client.async_get_current_weather.await_count == 2
+    assert client.async_get_hourly_forecast.await_count == 2
+    assert client.async_get_humidity_map.await_count == 2
+    assert client.async_get_pressure_map.await_count == 1

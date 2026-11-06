@@ -135,6 +135,9 @@
             "dew_point": {
                 "name": "Dew point"
             },
+            "apparent_temperature": {
+                "name": "Apparent temperature"
+            },
             "pressure": {
                 "name": "Pressure"
             },

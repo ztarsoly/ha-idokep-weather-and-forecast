@@ -26,7 +26,7 @@ from homeassistant.const import (
 
 from . import calculations
 from .api import WeatherConditionMapper, WindStrengthMapper
-from .coordinator import CURRENT, HUMIDITY_MAP, PRESSURE_MAP, SOURCE_ENTITIES, UV_MAP
+from .coordinator import HUMIDITY_MAP, PRESSURE_MAP, SOURCE_ENTITIES, UV_MAP
 from .entity import IdokepEntity, IdokepStationEntity
 
 if TYPE_CHECKING:
@@ -186,6 +186,14 @@ ENTITY_DESCRIPTIONS = (
     SensorEntityDescription(
         key="dew_point",
         translation_key="dew_point",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        suggested_display_precision=DISPLAY_PRECISION,
+        device_class=SensorDeviceClass.TEMPERATURE,
+    ),
+    # Calculated from the temperature, humidity and estimated wind speed above
+    SensorEntityDescription(
+        key="apparent_temperature",
+        translation_key="apparent_temperature",
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         suggested_display_precision=DISPLAY_PRECISION,
         device_class=SensorDeviceClass.TEMPERATURE,
@@ -427,15 +435,12 @@ class IdokepSensor(IdokepEntity, SensorEntity):
         entity_description: SensorEntityDescription,
     ) -> None:
         """Initialize the sensor class."""
-        source = next(
-            (
-                source
-                for source, keys in SOURCE_ENTITIES.items()
-                if entity_description.key in keys
-            ),
-            CURRENT,
+        sources = frozenset(
+            source
+            for source, keys in SOURCE_ENTITIES.items()
+            if entity_description.key in keys
         )
-        super().__init__(coordinator, frozenset({source}))
+        super().__init__(coordinator, sources)
         self.entity_description = entity_description
         self._attr_unique_id = (
             f"{coordinator.config_entry.entry_id}_{entity_description.key}"

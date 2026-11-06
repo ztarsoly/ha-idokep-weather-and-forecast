@@ -13,6 +13,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .api import IdokepApiClientCommunicationError
+from .calculations import apparent_temperature
 from .const import (
     CURRENT,
     HOURLY,
@@ -41,11 +42,12 @@ REQUIRED_KEYS = {
 
 
 # The entities reading each page, by the end of their unique ID. Needed at
-# startup, before the entities listen; current conditions are always fetched
-# then, since the entry starts from them.
+# startup, before the entities listen, and for the sensors' listener contexts.
 SOURCE_ENTITIES = {
+    CURRENT: ("weather", "temperature", "condition", "apparent_temperature"),
     HOURLY: (
         "weather",
+        "apparent_temperature",
         "temperature_max_today",
         "temperature_min_today",
         "wind_bearing",
@@ -57,7 +59,7 @@ SOURCE_ENTITIES = {
         "alert_level",
         "storm_expected_1h",
     ),
-    HUMIDITY_MAP: ("humidity", "dew_point"),
+    HUMIDITY_MAP: ("humidity", "dew_point", "apparent_temperature"),
     PRESSURE_MAP: ("pressure",),
     UV_MAP: ("uv_index",),
 }
@@ -246,7 +248,8 @@ class IdokepDataUpdateCoordinator(DataUpdateCoordinator):
         Return the sources to fetch before any entity listens.
 
         A page is left out if all of its entities are registered as disabled;
-        one not registered yet is new, so it is enabled by default.
+        one not registered yet is new, so it is enabled by default. Current
+        conditions are always fetched, since the entry starts from them.
         """
         entry_id = self.config_entry.entry_id
         registered = {
@@ -264,7 +267,7 @@ class IdokepDataUpdateCoordinator(DataUpdateCoordinator):
                 for key in keys
             )
         }
-        return set(self.schedules) - disabled
+        return set(self.schedules) - (disabled - {CURRENT})
 
     async def async_tick(self, now: datetime) -> None:
         """Refresh if a needed source is due (called at every whole minute)."""
@@ -336,6 +339,12 @@ class IdokepDataUpdateCoordinator(DataUpdateCoordinator):
         data: dict[str, Any] = {}
         for source in self.schedules:
             data.update(self._source_data[source])
+        # Recalculated at every update, from the pages' latest values
+        feels_like = apparent_temperature(
+            data.get("temperature"), data.get("humidity"), data.get("wind_speed")
+        )
+        if feels_like is not None:
+            data["apparent_temperature"] = feels_like
 
         if not data:
             msg = f"No weather data found for location: {location}"

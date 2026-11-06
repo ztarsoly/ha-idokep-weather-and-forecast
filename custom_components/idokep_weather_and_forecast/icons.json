@@ -65,6 +65,9 @@
       "station_dew_point": {
         "default": "mdi:thermometer-water"
       },
+      "apparent_temperature": {
+        "default": "mdi:thermometer-lines"
+      },
       "station_apparent_temperature": {
         "default": "mdi:thermometer-lines"
       },
