@@ -208,3 +208,59 @@ def test_restore_storm_value_only_if_fresh() -> None:
     old = {"fetched": (NOW - timedelta(minutes=90)).isoformat(), "data": data}
     assert restore(HOURLY, fresh, NOW)["storm_expected"] is True
     assert "storm_expected" not in restore(HOURLY, old, NOW)
+
+
+def _saved_by_an_earlier_version() -> dict:
+    """Return forecast data with the old midpoint speed and no gust."""
+    return {
+        "fetched": (NOW - timedelta(minutes=10)).isoformat(),
+        "data": {
+            "wind_strength": "gentle_breeze",
+            "wind_speed": 16,
+            "hourly_forecast": [
+                {
+                    "datetime": "2026-10-29T20:00:00+01:00",
+                    "wind_strength": "gentle_breeze",
+                    "native_wind_speed": 16,
+                },
+                {"datetime": "2026-10-29T21:00:00+01:00", "native_wind_speed": 9},
+            ],
+        },
+    }
+
+
+def test_restore_recalculates_the_wind_estimates() -> None:
+    """Saved estimates are replaced by the current ones from the wind strength."""
+    result = restore(HOURLY, _saved_by_an_earlier_version(), NOW)
+
+    assert result["wind_speed"] == 12
+    assert result["wind_gust_speed"] == 19
+    assert result["hourly_forecast"][0]["native_wind_speed"] == 12
+    assert result["hourly_forecast"][0]["native_wind_gust_speed"] == 19
+
+
+def test_restore_keeps_items_without_a_known_wind_strength() -> None:
+    """Without a known strength there is nothing to recalculate from."""
+    saved = _saved_by_an_earlier_version()
+    saved["data"]["wind_strength"] = "unknown_word"
+
+    result = restore(HOURLY, saved, NOW)
+
+    assert result["wind_speed"] == 16
+    assert "wind_gust_speed" not in result
+    assert result["hourly_forecast"][1] == {
+        "datetime": "2026-10-29T21:00:00+01:00",
+        "native_wind_speed": 9,
+    }
+
+
+def test_restore_after_an_hour_recalculates_only_the_hours() -> None:
+    """The current wind isn't restored once old, so it isn't made up either."""
+    saved = _saved_by_an_earlier_version()
+    saved["fetched"] = (NOW - timedelta(minutes=90)).isoformat()
+
+    result = restore(HOURLY, saved, NOW)
+
+    assert "wind_speed" not in result
+    assert "wind_gust_speed" not in result
+    assert result["hourly_forecast"][0]["native_wind_gust_speed"] == 19

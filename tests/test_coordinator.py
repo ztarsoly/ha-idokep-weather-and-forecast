@@ -14,6 +14,7 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 from homeassistant.util import dt as dt_util
 
 from custom_components.idokep_weather_and_forecast.api import (
+    IdokepApiClient,
     IdokepApiClientCommunicationError,
 )
 from custom_components.idokep_weather_and_forecast.coordinator import (
@@ -896,3 +897,43 @@ async def test_no_apparent_temperature_without_the_gust(
     data = await update_at(coordinator, local(2026, 10, 29, 12, 7))
 
     assert "apparent_temperature" not in data
+
+
+@pytest.mark.asyncio
+async def test_upgrade_mid_hour_has_gust_and_apparent_temperature(
+    coordinator: IdokepDataUpdateCoordinator, fake_store: type[FakeStore]
+) -> None:
+    """Data saved by an earlier version gets the current wind estimates at startup."""
+    client = IdokepApiClient(Mock())
+    coordinator.config_entry.runtime_data.client = client
+    coordinator.config_entry.entry_id = "entry1"
+    fetched = local(2026, 10, 29, 12, 0).isoformat()
+    fake_store.files["idokep_weather_and_forecast.entry1"] = {
+        "location": "Budapest",
+        "sources": {
+            HOURLY: {
+                "fetched": fetched,
+                "data": {
+                    "wind_strength": "gentle_breeze",
+                    "wind_speed": 16,
+                    "hourly_forecast": [
+                        {
+                            "datetime": local(2026, 10, 29, 12, 0).isoformat(),
+                            "wind_strength": "gentle_breeze",
+                            "native_wind_speed": 16,
+                        }
+                    ],
+                },
+            },
+        },
+    }
+    with patch.object(
+        dt_util, "utcnow", return_value=dt_util.as_utc(local(2026, 10, 29, 12, 8))
+    ):
+        await coordinator.async_restore()
+
+    assert coordinator._source_data[HOURLY]["wind_speed"] == 12
+    assert coordinator._source_data[HOURLY]["wind_gust_speed"] == 19
+    kept = client._hourly_parser._last_forecast[0]
+    assert kept["native_wind_speed"] == 12
+    assert kept["native_wind_gust_speed"] == 19

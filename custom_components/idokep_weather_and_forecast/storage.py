@@ -19,7 +19,7 @@ from typing import Any
 
 from homeassistant.util import dt as dt_util
 
-from .api import AlertData
+from .api import AlertData, WindStrengthMapper
 from .const import (
     CURRENT,
     DOMAIN,
@@ -93,7 +93,7 @@ def _restore_forecast(
     today = dt_util.as_local(now).date()
 
     if hourly := _hours_not_over(data.get("hourly_forecast", []), now):
-        result["hourly_forecast"] = hourly
+        result["hourly_forecast"] = [_with_wind_estimates(item) for item in hourly]
     if daily := _days_from(data.get("daily_forecast", []), today):
         result["daily_forecast"] = daily
 
@@ -115,8 +115,29 @@ def _restore_forecast(
                 result[key] = data[key]
         if "alerts" in data:
             result["alerts"] = [AlertData(**alert) for alert in data["alerts"]]
+        strength = result.get("wind_strength")
+        if strength in WindStrengthMapper.SPEEDS:
+            result["wind_speed"] = WindStrengthMapper.SPEEDS[strength]
+            result["wind_gust_speed"] = WindStrengthMapper.GUSTS[strength]
 
     return result
+
+
+def _with_wind_estimates(item: dict[str, Any]) -> dict[str, Any]:
+    """
+    Return an hourly item with its wind speed and gust from its wind strength.
+
+    They are only estimates from the strength, so data saved by an earlier
+    version may have other estimates, or none.
+    """
+    strength = item.get("wind_strength")
+    if strength not in WindStrengthMapper.SPEEDS:
+        return item
+    return {
+        **item,
+        "native_wind_speed": WindStrengthMapper.SPEEDS[strength],
+        "native_wind_gust_speed": WindStrengthMapper.GUSTS[strength],
+    }
 
 
 def _hours_not_over(items: list[dict], now: datetime) -> list[dict]:
