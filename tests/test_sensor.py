@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 from homeassistant.components.sensor import (
@@ -290,6 +290,30 @@ class TestIdokepSensor:
         )
         sensor = IdokepSensor(coordinator, condition_desc)
         assert sensor.native_value == "partlycloudy"
+
+    @pytest.mark.parametrize(
+        ("condition", "sun_up", "expected"),
+        [
+            ("sunny", True, "sunny"),
+            ("sunny", False, "clear-night"),
+            ("cloudy", False, "cloudy"),
+            ("cloudy", True, "cloudy"),
+        ],
+    )
+    def test_condition_at_night(
+        self, condition: str, sun_up: bool, expected: str
+    ) -> None:
+        """Sunny shows as clear-night while the sun is down."""
+        coordinator = Mock()
+        coordinator.config_entry.data = {"location": "Budapest"}
+        coordinator.data = {"condition": condition}
+        desc = next(d for d in ENTITY_DESCRIPTIONS if d.key == "condition")
+        sensor = IdokepSensor(coordinator, desc)
+        with patch(
+            "custom_components.idokep_weather_and_forecast.sensor.sun.is_up",
+            return_value=sun_up,
+        ):
+            assert sensor.native_value == expected
 
     def test_native_value_unmapped_condition_is_none(self) -> None:
         """An unmapped ("unknown") condition becomes None, not an invalid option."""

@@ -124,8 +124,8 @@ class WeatherConditionMapper:
 
     @classmethod
     def conditions(cls) -> list[str]:
-        """Return every condition map_condition can produce (except unknown)."""
-        return sorted(set(cls._CONDITION_MAPPING.values()))
+        """Return every condition an entity can show (except unknown)."""
+        return sorted({*cls._CONDITION_MAPPING.values(), "clear-night"})
 
 
 # Condition texts of a storm: those mapped to a lightning condition, and two
@@ -741,7 +741,20 @@ class HourlyForecastParser(WeatherParser):
     def extract_condition(self, card: Tag) -> str | None:
         """Extract weather condition from the icon container tag."""
         text = self._condition_text(card)
-        return None if text is None else WeatherConditionMapper.map_condition(text)
+        if text is None:
+            return None
+        condition = WeatherConditionMapper.map_condition(text)
+        if condition == "sunny" and self._has_night_icon(card):
+            return "clear-night"
+        return condition
+
+    @staticmethod
+    def _has_night_icon(card: Tag) -> bool:
+        """Return True if the card's icon is a night one (310.svg; by day 010.svg)."""
+        icon_container = card.find("div", class_="forecast-icon-container")
+        icon = icon_container.find("img") if isinstance(icon_container, Tag) else None
+        source = icon.get("src") if isinstance(icon, Tag) else None
+        return isinstance(source, str) and bool(re.search(r"/3\d\d\.svg", source))
 
     def _is_stormy(self, card: Tag) -> bool:
         """Return True if the card's condition is a storm."""

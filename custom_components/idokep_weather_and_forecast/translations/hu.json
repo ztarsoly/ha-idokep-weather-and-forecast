@@ -54,6 +54,7 @@
             "condition": {
                 "name": "Állapot",
                 "state": {
+                    "clear-night": "Derült éjszaka",
                     "cloudy": "Felhős",
                     "exceptional": "Rendkívüli",
                     "fog": "Köd",

@@ -10,6 +10,10 @@ from homeassistant.components.sensor import (
     SensorEntity,
     SensorEntityDescription,
 )
+from homeassistant.components.weather import (
+    ATTR_CONDITION_CLEAR_NIGHT,
+    ATTR_CONDITION_SUNNY,
+)
 from homeassistant.const import (
     DEGREE,
     PERCENTAGE,
@@ -23,6 +27,7 @@ from homeassistant.const import (
     UnitOfTemperature,
     UnitOfVolumetricFlux,
 )
+from homeassistant.helpers import sun
 
 from . import calculations
 from .api import WeatherConditionMapper, WindStrengthMapper
@@ -473,6 +478,12 @@ class IdokepSensor(IdokepEntity, SensorEntity):
         if self.entity_description.key == "alert_level":
             return highest_alert_level(self.coordinator.data.get("alerts_by_level"))
         value = self.coordinator.data.get(self.entity_description.key)
+        if (
+            self.entity_description.key == "condition"
+            and value == ATTR_CONDITION_SUNNY
+            and not sun.is_up(self.hass)
+        ):
+            return ATTR_CONDITION_CLEAR_NIGHT
         options = self.entity_description.options
         if options is not None and value not in options:
             # e.g. "unknown" for an unmapped condition; HA shows it as Unknown

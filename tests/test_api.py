@@ -2256,3 +2256,47 @@ def test_wind_speed_and_gust_are_the_ends_of_each_level() -> None:
         "violent_storm": 117,
         "hurricane": 118,  # the scale has no upper end
     }
+
+
+# ---- night hours ------------------------------------------------------------------
+
+
+def _condition_card(text: str | None, icon: str | None) -> Tag:
+    """Return an hourly card with a condition text and an icon file."""
+    link = (
+        ""
+        if text is None
+        else f'<a data-bs-content="{text}">'
+        + (f'<img src="/assets/forecastIcons/{icon}.svg">' if icon else "")
+        + "</a>"
+    )
+    return BeautifulSoup(
+        f'<div class="ik wide-hourly-forecast-card">'
+        f'<div class="forecast-icon-container">{link}</div></div>',
+        "html.parser",
+    ).find("div")
+
+
+@pytest.mark.parametrize(
+    ("text", "icon", "expected"),
+    [
+        ("derült", "310", "clear-night"),  # as on the page at night
+        ("derült", "010", "sunny"),  # by day
+        ("derült", None, "sunny"),  # no icon: not known to be night
+        ("gyengén felhős", "321", "partlycloudy"),  # HA has no night variant
+        ("gyengén felhős", "021", "partlycloudy"),
+        ("Napos", "310", "clear-night"),
+        (None, None, None),
+    ],
+)
+def test_hourly_condition_at_night(
+    text: str | None, icon: str | None, expected: str | None
+) -> None:
+    """A clear hour with the page's night icon is clear-night, not sunny."""
+    card = _condition_card(text, icon)
+    assert HourlyForecastParser().extract_condition(card) == expected
+
+
+def test_clear_night_is_a_known_condition() -> None:
+    """The Condition sensor's options include it, though no page text maps to it."""
+    assert "clear-night" in WeatherConditionMapper.conditions()

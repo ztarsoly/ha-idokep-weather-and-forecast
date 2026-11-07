@@ -54,6 +54,7 @@
             "condition": {
                 "name": "Condition",
                 "state": {
+                    "clear-night": "Clear night",
                     "cloudy": "Cloudy",
                     "exceptional": "Exceptional",
                     "fog": "Fog",

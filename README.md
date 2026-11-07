@@ -27,7 +27,7 @@ Minden felvett bejegyzéshez (településhez) az alábbiak jönnek létre. A `<N
 |---|---|---|
 | `<Név> Előrejelzés` | időjárás | aktuális állapot, hőmérséklet, szél, becsült széllökés (a Beaufort-fokozat felső határa), páratartalom, harmatpont, hőérzet, légnyomás, UV-index, az aktuális óra csapadéka (`precipitation` attribútum, mm); óránkénti és napi előrejelzés |
 | Hőmérséklet | szenzor (°C) | aktuális |
-| Állapot | szenzor (felsorolás) | pl. napos, borult, eső |
+| Állapot | szenzor (felsorolás) | pl. napos, derült éjszaka (napnyugta után), borult, eső |
 | Mai maximum hőmérséklet | szenzor (°C) | a napi előrejelzésből, éjfélig megmarad |
 | Mai minimum hőmérséklet | szenzor (°C) | a napi előrejelzésből, éjfélig megmarad |
 | Szélirány (fok) | szenzor (°) | az aktuális óra előrejelzéséből |
