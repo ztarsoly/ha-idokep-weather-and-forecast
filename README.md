@@ -42,7 +42,7 @@ Minden felvett bejegyzéshez (településhez) az alábbiak jönnek létre. A `<N
 | Hőérzet | szenzor (°C) | számított a hőmérsékletből, a páratartalomból és a **becsült** szélsebesség és széllökés átlagából (Steadman-képlet, napsugárzás nélkül), minden frissítéskor |
 | Légnyomás | szenzor (hPa) | a település állomásainak átlaga a légnyomástérképről (`/legnyomas`), tengerszintre átszámítva |
 | UV-B index | szenzor | a település állomásainak átlaga az UV-térképről (`/uv`); kevés állomás méri |
-| Riasztási szint 24 órán belül | szenzor (felsorolás) | a legmagasabb szint az oldal figyelmeztető sávjából és az első 24 órás kártya riasztásaiból: Nincs riasztás, Sárga, Narancs, Piros |
+| Riasztási szint 24 órán belül | szenzor (felsorolás) | a legmagasabb szint az oldal riasztási dobozából (amely nem ad időszakot) és az első 24 órás kártya riasztásaiból: Nincs riasztás, Sárga, Narancs, Piros |
 | Vihar várható egy órán belül | bináris szenzor | bekapcsol, ha az aktuális vagy a következő óra viharos (zivatar, száraz zivatar, villámlás, eső viharos széllel, porvihar); az oldal óránkénti letöltésekor frissül |
 
 A páratartalom, a harmatpont, a hőérzet, a légnyomás és az UV-B index „nem elérhető”, ha a településnek nincs ilyen értéket mérő állomása.

@@ -349,13 +349,14 @@ class AlertParser(WeatherParser):
         """Parse weather alerts from page."""
         result: dict[str, Any] = {"alerts": []}
 
-        # Parse general alert bar
-        general_alerts = self._parse_general_alert(soup)
-        result["alerts"].extend(general_alerts)
-
-        # Parse hourly forecast alerts
-        hourly_alerts = self._parse_hourly_alerts(soup)
-        result["alerts"].extend(hourly_alerts)
+        # The alert box and the hourly cards often show the same alert (the
+        # cards' copy has an icon); it counts once, with the cards' icon
+        seen: set[tuple[str, str, str]] = set()
+        for alert in [*self._parse_hourly_alerts(soup), *self._parse_general_alert(soup)]:
+            key = (alert.level, alert.type, alert.description)
+            if key not in seen:
+                seen.add(key)
+                result["alerts"].append(alert)
 
         # Organize alerts by level
         result["alerts_by_level"] = self._organize_by_level(result["alerts"])
@@ -363,48 +364,39 @@ class AlertParser(WeatherParser):
         return result
 
     def _parse_general_alert(self, soup: BeautifulSoup) -> list[AlertData]:
-        """Parse the general alert bar at top of page."""
-        alerts = []
-        alert_bar = soup.find("div", id="topalertbar")
+        """
+        Parse the alert box at the top of the page.
 
-        if not alert_bar or not isinstance(alert_bar, Tag):
-            return alerts
-
-        # Determine alert level from class
-        level = None
-        class_attr = alert_bar.get("class", [])
-        if isinstance(class_attr, list):
-            if "yellow" in class_attr:
-                level = "yellow"
-            elif "orange" in class_attr:
-                level = "orange"
-            elif "red" in class_attr:
-                level = "red"
-
+        It holds only the level and the type, e.g. "Sárga riasztás ónos esőre"
+        (<div class="... inlineWeatherAlert">); the level comes from the text.
+        """
+        box = soup.find("div", class_="inlineWeatherAlert")
+        if not isinstance(box, Tag):
+            return []
+        description = " ".join(box.get_text(" ", strip=True).split())
+        level = self._level_from_text(description)
         if not level:
-            return alerts
-
-        # Extract alert text
-        link = alert_bar.find("a")
-        if link and isinstance(link, Tag):
-            description = link.get_text(strip=True)
-            # Remove the icon text
-            description = re.sub(r"^[\s\S]*?riasztás", "riasztás", description)
-            description = description.strip()
-
-            # Extract alert type
-            alert_type = self._extract_alert_type(description)
-
-            alerts.append(
-                AlertData(
-                    level=level,
-                    type=alert_type,
-                    description=description,
-                    icon_url=None,
-                )
+            return []
+        return [
+            AlertData(
+                level=level,
+                type=self._extract_alert_type(description),
+                description=description,
+                icon_url=None,
             )
+        ]
 
-        return alerts
+    @staticmethod
+    def _level_from_text(text: str) -> str | None:
+        """Return the level named in an alert text (Sárga, Narancs, Piros)."""
+        lowered = text.lower()
+        if "sárga" in lowered:
+            return "yellow"
+        if "narancs" in lowered:
+            return "orange"
+        if "piros" in lowered or "vörös" in lowered:
+            return "red"
+        return None
 
     def _parse_hourly_alerts(self, soup: BeautifulSoup) -> list[AlertData]:
         """Parse hourly forecast alert icons."""
@@ -429,18 +421,7 @@ class AlertParser(WeatherParser):
             if not description or not isinstance(description, str):
                 continue
 
-            # Determine level from description
-            level = None
-            if "Sárga" in description or "sárga" in description:
-                level = "yellow"
-            elif "Narancs" in description or "narancs" in description:
-                level = "orange"
-            elif (
-                "Piros" in description
-                or "piros" in description
-                or "Vörös" in description
-            ):
-                level = "red"
+            level = self._level_from_text(description)
 
             if not level:
                 continue

@@ -11,9 +11,9 @@ class TestAlertParser:
     """Test alert parsing functionality."""
 
     def test_parse_general_alert_yellow(self) -> None:
-        """Test parsing yellow general alert."""
+        """Test parsing a yellow alert in the alert box."""
         html = """
-        <div class="container ik alert-bar yellow p-0" id="topalertbar">
+        <div class="background selectiveYellow color-darkblue p-2 mt-2 mb-2 rounded inlineWeatherAlert">
             <a href="/radar#riasztas">
                 <i class="fas fa-fw fa-exclamation-triangle"></i>
                 Sárga riasztás ónos esőre
@@ -32,9 +32,9 @@ class TestAlertParser:
         assert "ónos esőre" in alert.description
 
     def test_parse_general_alert_orange(self) -> None:
-        """Test parsing orange general alert."""
+        """Test parsing an orange alert in the alert box."""
         html = """
-        <div class="container ik alert-bar orange p-0" id="topalertbar">
+        <div class="background selectiveYellow color-darkblue p-2 mt-2 mb-2 rounded inlineWeatherAlert">
             <a href="/radar#riasztas">
                 <i class="fas fa-fw fa-exclamation-triangle"></i>
                 Narancs riasztás zivatar
@@ -52,9 +52,9 @@ class TestAlertParser:
         assert alert.type == "thunderstorm"
 
     def test_parse_general_alert_red(self) -> None:
-        """Test parsing red general alert."""
+        """Test parsing a red alert in the alert box."""
         html = """
-        <div class="container ik alert-bar red p-0" id="topalertbar">
+        <div class="background selectiveYellow color-darkblue p-2 mt-2 mb-2 rounded inlineWeatherAlert">
             <a href="/radar#riasztas">
                 <i class="fas fa-fw fa-exclamation-triangle"></i> Piros riasztás vihar
             </a>
@@ -127,7 +127,7 @@ class TestAlertParser:
     def test_alerts_organized_by_level(self) -> None:
         """Test that alerts are properly organized by severity level."""
         html = """
-        <div class="container ik alert-bar yellow p-0" id="topalertbar">
+        <div class="background selectiveYellow color-darkblue p-2 mt-2 mb-2 rounded inlineWeatherAlert">
             <a href="/radar#riasztas">Sárga riasztás szélre</a>
         </div>
         <div class="ik genericHourlyAlert">
@@ -179,7 +179,7 @@ class TestAlertParser:
     def test_alert_type_extraction_heat(self) -> None:
         """Test alert type extraction for heat warning."""
         html = """
-        <div class="container ik alert-bar orange p-0" id="topalertbar">
+        <div class="background selectiveYellow color-darkblue p-2 mt-2 mb-2 rounded inlineWeatherAlert">
             <a href="/radar#riasztas">Narancs riasztás hőségre</a>
         </div>
         """
@@ -192,7 +192,7 @@ class TestAlertParser:
     def test_alert_type_extraction_fog(self) -> None:
         """Test alert type extraction for fog warning."""
         html = """
-        <div class="container ik alert-bar yellow p-0" id="topalertbar">
+        <div class="background selectiveYellow color-darkblue p-2 mt-2 mb-2 rounded inlineWeatherAlert">
             <a href="/radar#riasztas">Sárga riasztás ködre</a>
         </div>
         """
