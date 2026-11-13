@@ -264,3 +264,12 @@ def test_restore_after_an_hour_recalculates_only_the_hours() -> None:
     assert "wind_speed" not in result
     assert "wind_gust_speed" not in result
     assert result["hourly_forecast"][0]["native_wind_gust_speed"] == 19
+
+
+def test_restore_warning_level_only_if_fresh() -> None:
+    """The banner's level is kept for an hour, like the alerts."""
+    data = {"warning_level": "yellow"}
+    fresh = {"fetched": (NOW - timedelta(minutes=30)).isoformat(), "data": data}
+    old = {"fetched": (NOW - timedelta(minutes=90)).isoformat(), "data": data}
+    assert restore(HOURLY, fresh, NOW)["warning_level"] == "yellow"
+    assert "warning_level" not in restore(HOURLY, old, NOW)

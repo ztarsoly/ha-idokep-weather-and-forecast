@@ -58,6 +58,7 @@ SOURCE_ENTITIES = {
         "precipitation",
         "precipitation_probability",
         "alert_level",
+        "warning_level",
         "storm_expected_1h",
     ),
     HUMIDITY_MAP: ("humidity", "dew_point", "apparent_temperature"),

@@ -605,10 +605,10 @@ class TestIdokepApiClientWeatherScraping:
 # ---------------------------------------------------------------------------
 
 
-class TestAlertParserGeneral:
-    """Tests for AlertParser._parse_general_alert(): the alert box."""
+class TestAlertParserWarning:
+    """Tests for AlertParser._parse_warning_level(): the banner."""
 
-    # As on the Salgótarján page of 10 November 2026
+    # As on the forecast pages of November 2026
     BOX = """
         <div class="container position-relative siteMainOuter"><a>
         <div class="background selectiveYellow color-darkblue p-2 mt-2 mb-2 rounded inlineWeatherAlert">
@@ -621,74 +621,44 @@ class TestAlertParserGeneral:
         """Return a fresh AlertParser instance."""
         return AlertParser()
 
-    def test_parse_returns_empty_alerts_without_an_alert_box(
-        self, parser: AlertParser
-    ) -> None:
-        """parse() returns empty alerts dict when there is no alert box."""
-        soup = BeautifulSoup("<div>no alerts here</div>", "html.parser")
-        result = parser.parse(soup)
+    def test_no_banner_is_no_warning(self, parser: AlertParser) -> None:
+        """Without a banner the warning level is none."""
+        result = parser.parse(BeautifulSoup("<div>no alerts here</div>", "html.parser"))
+        assert result["warning_level"] == "none"
         assert result["alerts"] == []
-        assert "alerts_by_level" in result
 
     @pytest.mark.parametrize(
-        ("text", "level", "alert_type"),
+        ("text", "level"),
         [
-            ("Sárga riasztás ónos esőre", "yellow", "freezing_rain"),
-            ("Narancs riasztás szél miatt", "orange", "wind"),
-            ("Piros riasztás hó miatt", "red", "snow"),
-            ("Vörös riasztás hőség miatt", "red", "heat"),
+            ("Sárga riasztás viharos szélre", "yellow"),
+            ("Sárga figyelmeztetés zivatarra", "yellow"),
+            ("Sárga figyelmeztetés viharos szélre, kiadós esőzésre", "yellow"),
+            ("Narancs riasztás szél miatt", "orange"),
+            ("Piros figyelmeztetés hó miatt", "red"),
+            ("Vörös riasztás hőség miatt", "red"),
+            ("Figyelmeztetés", "none"),  # no level named
         ],
     )
-    def test_parse_alert_box(
-        self, parser: AlertParser, text: str, level: str, alert_type: str
-    ) -> None:
-        """The level and type come from the box's text."""
-        soup = BeautifulSoup(self.BOX.format(text=text), "html.parser")
-        result = parser.parse(soup)
-        assert len(result["alerts"]) == 1
-        alert = result["alerts"][0]
-        assert alert.level == level
-        assert alert.type == alert_type
-        assert alert.description == text
-        assert alert.icon_url is None
+    def test_banner_level(self, parser: AlertParser, text: str, level: str) -> None:
+        """The level comes from the banner's text, an alert's or a warning's."""
+        result = parser.parse(BeautifulSoup(self.BOX.format(text=text), "html.parser"))
+        assert result["warning_level"] == level
 
-    def test_alert_box_without_a_level_is_ignored(self, parser: AlertParser) -> None:
-        """A box text that names no level produces no alert."""
-        soup = BeautifulSoup(self.BOX.format(text="Figyelmeztetés"), "html.parser")
-        assert parser.parse(soup)["alerts"] == []
+    def test_banner_is_not_an_alert(self, parser: AlertParser) -> None:
+        """Only the hourly cards' icons are alerts, even when the banner is one."""
+        html = self.BOX.format(text="Sárga riasztás viharos szélre") + "".join(
+            '<div class="ik genericHourlyAlert"></div>' for _ in range(36)
+        )
+        result = parser.parse(BeautifulSoup(html, "html.parser"))
+        assert result["alerts"] == []
+        assert result["warning_level"] == "yellow"
 
     def test_old_top_alert_bar_is_not_read(self, parser: AlertParser) -> None:
         """idokep.hu no longer has #topalertbar; it isn't used."""
         html = """
         <div id="topalertbar" class="yellow"><a>Sárga riasztás szél miatt</a></div>
         """
-        assert parser.parse(BeautifulSoup(html, "html.parser"))["alerts"] == []
-
-    def test_box_and_card_with_the_same_alert_count_once(
-        self, parser: AlertParser
-    ) -> None:
-        """The page shows the alert in the box and on the hourly cards too."""
-        html = self.BOX.format(text="Sárga riasztás ónos esőre") + """
-        <div class="ik genericHourlyAlert">
-            <a class="hover-over" data-bs-content="Sárga riasztás ónos esőre">
-                <img class="ik forecast-alert-icon" src="/images/elore3/figyikonok2/onoseso.png">
-            </a>
-        </div>
-        """
-        result = parser.parse(BeautifulSoup(html, "html.parser"))
-        assert len(result["alerts"]) == 1
-        assert len(result["alerts_by_level"]["yellow"]) == 1
-        assert result["alerts"][0].icon_url == (
-            "https://www.idokep.hu/images/elore3/figyikonok2/onoseso.png"
-        )
-
-    def test_box_counts_without_hourly_alerts(self, parser: AlertParser) -> None:
-        """With no alert on the first 24 hourly cards, the box still sets the level."""
-        html = self.BOX.format(text="Sárga riasztás ónos esőre") + "".join(
-            '<div class="ik genericHourlyAlert"></div>' for _ in range(36)
-        )
-        result = parser.parse(BeautifulSoup(html, "html.parser"))
-        assert [alert.level for alert in result["alerts"]] == ["yellow"]
+        assert parser.parse(BeautifulSoup(html, "html.parser"))["warning_level"] == "none"
 
     def test_alerts_by_level_structure(self, parser: AlertParser) -> None:
         """alerts_by_level always has yellow/orange/red keys."""
@@ -2222,10 +2192,10 @@ def _alert_cards(alert_hour: int, count: int = 36) -> BeautifulSoup:
 
 
 @pytest.mark.parametrize(
-    ("alert_hour", "counted"), [(0, True), (23, True), (24, False), (35, False)]
+    ("alert_hour", "counted"), [(0, True), (2, True), (3, False), (35, False)]
 )
-def test_alerts_of_the_first_24_cards_count(alert_hour: int, counted: bool) -> None:
-    """An alert on a card after the first 24 is left out."""
+def test_alerts_of_the_first_3_cards_count(alert_hour: int, counted: bool) -> None:
+    """An alert on a card after the first 3 is left out."""
     result = AlertParser().parse(_alert_cards(alert_hour))
     assert bool(result["alerts_by_level"]["red"]) is counted
 

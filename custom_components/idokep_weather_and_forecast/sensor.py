@@ -181,10 +181,17 @@ ENTITY_DESCRIPTIONS = (
         native_unit_of_measurement=PERCENTAGE,
         suggested_display_precision=DISPLAY_PRECISION,
     ),
-    # The highest level among the alerts on the forecast page
+    # The highest level among the hourly cards' alerts (the next 3 hours)
     SensorEntityDescription(
         key="alert_level",
         translation_key="alert_level",
+        device_class=SensorDeviceClass.ENUM,
+        options=ALERT_LEVELS,
+    ),
+    # The level of the banner at the top of the page (an alert or a warning)
+    SensorEntityDescription(
+        key="warning_level",
+        translation_key="warning_level",
         device_class=SensorDeviceClass.ENUM,
         options=ALERT_LEVELS,
     ),

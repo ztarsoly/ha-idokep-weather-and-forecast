@@ -125,12 +125,21 @@
                 "name": "Csapadék valószínűsége"
             },
             "alert_level": {
-                "name": "Riasztási szint 24 órán belül",
+                "name": "Riasztás 3 órán belül",
                 "state": {
                     "none": "Nincs riasztás",
-                    "yellow": "Sárga",
-                    "orange": "Narancs",
-                    "red": "Piros"
+                    "yellow": "Sárga riasztás",
+                    "orange": "Narancs riasztás",
+                    "red": "Piros riasztás"
+                }
+            },
+            "warning_level": {
+                "name": "Figyelmeztetés 24 órán belül",
+                "state": {
+                    "none": "Nincs figyelmeztetés",
+                    "yellow": "Sárga figyelmeztetés",
+                    "orange": "Narancs figyelmeztetés",
+                    "red": "Piros figyelmeztetés"
                 }
             },
             "humidity": {

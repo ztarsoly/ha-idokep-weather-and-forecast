@@ -46,6 +46,7 @@ SENSOR_SOURCES = {
     "precipitation": HOURLY,
     "precipitation_probability": HOURLY,
     "alert_level": HOURLY,
+    "warning_level": HOURLY,
     "apparent_temperature": {CURRENT, HOURLY, HUMIDITY_MAP},
     "humidity": HUMIDITY_MAP,
     "dew_point": HUMIDITY_MAP,

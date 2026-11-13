@@ -326,9 +326,10 @@ class CurrentWeatherParser(WeatherParser):
 class AlertParser(WeatherParser):
     """Parser for weather alerts."""
 
-    # Every hourly card has one alert block (empty without an alert), so this
-    # many blocks from the first card cover the next 24 hours
-    HOURS = 24
+    # Every hourly card has one alert block (empty without an alert). The page
+    # shows an alert's icon on its first three cards: the current hour and the
+    # next two at the integration's fetch on the hour.
+    HOURS = 3
 
     # Mapping of Hungarian alert types to English names
     ALERT_TYPE_MAP: ClassVar[dict[str, str]] = {
@@ -346,45 +347,32 @@ class AlertParser(WeatherParser):
     }
 
     def parse(self, soup: BeautifulSoup) -> dict[str, Any]:
-        """Parse weather alerts from page."""
-        result: dict[str, Any] = {"alerts": []}
-
-        # The alert box and the hourly cards often show the same alert (the
-        # cards' copy has an icon); it counts once, with the cards' icon
-        seen: set[tuple[str, str, str]] = set()
-        for alert in [*self._parse_hourly_alerts(soup), *self._parse_general_alert(soup)]:
-            key = (alert.level, alert.type, alert.description)
-            if key not in seen:
-                seen.add(key)
-                result["alerts"].append(alert)
-
-        # Organize alerts by level
-        result["alerts_by_level"] = self._organize_by_level(result["alerts"])
-
-        return result
-
-    def _parse_general_alert(self, soup: BeautifulSoup) -> list[AlertData]:
         """
-        Parse the alert box at the top of the page.
+        Parse the alerts of the hourly cards and the warning banner's level.
 
-        It holds only the level and the type, e.g. "Sárga riasztás ónos esőre"
-        (<div class="... inlineWeatherAlert">); the level comes from the text.
+        The hourly cards' icons are alerts ("riasztás") for the coming hours;
+        the banner at the top of the page is an alert or a warning
+        ("figyelmeztetés").
+        """
+        alerts = self._parse_hourly_alerts(soup)
+        return {
+            "alerts": alerts,
+            "alerts_by_level": self._organize_by_level(alerts),
+            "warning_level": self._parse_warning_level(soup),
+        }
+
+    def _parse_warning_level(self, soup: BeautifulSoup) -> str:
+        """
+        Return the level of the banner at the top of the page, or "none".
+
+        It holds only the level and the type, e.g. "Sárga figyelmeztetés
+        zivatarra" or "Sárga riasztás viharos szélre" (<div class="...
+        inlineWeatherAlert">); the level comes from the text.
         """
         box = soup.find("div", class_="inlineWeatherAlert")
         if not isinstance(box, Tag):
-            return []
-        description = " ".join(box.get_text(" ", strip=True).split())
-        level = self._level_from_text(description)
-        if not level:
-            return []
-        return [
-            AlertData(
-                level=level,
-                type=self._extract_alert_type(description),
-                description=description,
-                icon_url=None,
-            )
-        ]
+            return "none"
+        return self._level_from_text(box.get_text(" ", strip=True)) or "none"
 
     @staticmethod
     def _level_from_text(text: str) -> str | None:

@@ -38,7 +38,7 @@ class TestIdokepSensorEntityDescriptions:
 
     def test_entity_descriptions_count(self) -> None:
         """Test that we have the expected number of entity descriptions."""
-        assert len(ENTITY_DESCRIPTIONS) == 17
+        assert len(ENTITY_DESCRIPTIONS) == 18
 
     def test_entity_descriptions_keys(self) -> None:
         """Test that entity descriptions have the expected keys."""
@@ -58,6 +58,7 @@ class TestIdokepSensorEntityDescriptions:
             "pressure",
             "uv_index",
             "alert_level",
+            "warning_level",
             "apparent_temperature",
             "wind_gust_speed",
         }
@@ -84,6 +85,20 @@ class TestIdokepSensorEntityDescriptions:
         assert desc.native_unit_of_measurement == unit
         assert desc.suggested_display_precision == 1
         assert desc.state_class is None
+
+    @pytest.mark.parametrize(
+        ("data", "expected"),
+        [({}, None), ({"warning_level": "none"}, "none"), ({"warning_level": "red"}, "red")],
+    )
+    def test_warning_level(
+        self, mock_coordinator: Mock, data: dict, expected: str | None
+    ) -> None:
+        """The banner's level; unknown until the forecast page is read."""
+        desc = next(d for d in ENTITY_DESCRIPTIONS if d.key == "warning_level")
+        assert desc.device_class == SensorDeviceClass.ENUM
+        assert desc.options == ["none", "yellow", "orange", "red"]
+        mock_coordinator.data = data
+        assert IdokepSensor(mock_coordinator, desc).native_value == expected
 
     @pytest.mark.parametrize(
         ("alerts_by_level", "expected"),

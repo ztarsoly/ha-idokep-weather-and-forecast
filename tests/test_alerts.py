@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from bs4 import BeautifulSoup
 
 from custom_components.idokep_weather_and_forecast.api import AlertParser
@@ -10,65 +11,26 @@ from custom_components.idokep_weather_and_forecast.api import AlertParser
 class TestAlertParser:
     """Test alert parsing functionality."""
 
-    def test_parse_general_alert_yellow(self) -> None:
-        """Test parsing a yellow alert in the alert box."""
-        html = """
+    @pytest.mark.parametrize(
+        ("text", "level"),
+        [
+            ("Sárga riasztás ónos esőre", "yellow"),
+            ("Sárga figyelmeztetés zivatarra", "yellow"),
+            ("Narancs riasztás zivatar", "orange"),
+            ("Piros riasztás vihar", "red"),
+        ],
+    )
+    def test_banner_sets_the_warning_level(self, text: str, level: str) -> None:
+        """The banner, an alert or a warning, sets the warning level, not alerts."""
+        html = f"""
         <div class="background selectiveYellow color-darkblue p-2 mt-2 mb-2 rounded inlineWeatherAlert">
-            <a href="/radar#riasztas">
-                <i class="fas fa-fw fa-exclamation-triangle"></i>
-                Sárga riasztás ónos esőre
-            </a>
+            <i class="fas fa-fw fa-exclamation-triangle"></i> {text}
         </div>
         """
-        soup = BeautifulSoup(html, "html.parser")
-        parser = AlertParser()
-        result = parser.parse(soup)
+        result = AlertParser().parse(BeautifulSoup(html, "html.parser"))
 
-        assert "alerts" in result
-        assert len(result["alerts"]) == 1
-        alert = result["alerts"][0]
-        assert alert.level == "yellow"
-        assert alert.type == "freezing_rain"
-        assert "ónos esőre" in alert.description
-
-    def test_parse_general_alert_orange(self) -> None:
-        """Test parsing an orange alert in the alert box."""
-        html = """
-        <div class="background selectiveYellow color-darkblue p-2 mt-2 mb-2 rounded inlineWeatherAlert">
-            <a href="/radar#riasztas">
-                <i class="fas fa-fw fa-exclamation-triangle"></i>
-                Narancs riasztás zivatar
-            </a>
-        </div>
-        """
-        soup = BeautifulSoup(html, "html.parser")
-        parser = AlertParser()
-        result = parser.parse(soup)
-
-        assert "alerts" in result
-        assert len(result["alerts"]) == 1
-        alert = result["alerts"][0]
-        assert alert.level == "orange"
-        assert alert.type == "thunderstorm"
-
-    def test_parse_general_alert_red(self) -> None:
-        """Test parsing a red alert in the alert box."""
-        html = """
-        <div class="background selectiveYellow color-darkblue p-2 mt-2 mb-2 rounded inlineWeatherAlert">
-            <a href="/radar#riasztas">
-                <i class="fas fa-fw fa-exclamation-triangle"></i> Piros riasztás vihar
-            </a>
-        </div>
-        """
-        soup = BeautifulSoup(html, "html.parser")
-        parser = AlertParser()
-        result = parser.parse(soup)
-
-        assert "alerts" in result
-        assert len(result["alerts"]) == 1
-        alert = result["alerts"][0]
-        assert alert.level == "red"
-        assert alert.type == "storm"
+        assert result["warning_level"] == level
+        assert result["alerts"] == []
 
     def test_parse_hourly_alert(self) -> None:
         """Test parsing hourly forecast alert."""
@@ -150,11 +112,12 @@ class TestAlertParser:
         assert "alerts_by_level" in result
         by_level = result["alerts_by_level"]
 
-        assert len(by_level["yellow"]) == 1
+        # The banner's yellow is the warning level, not an alert
+        assert by_level["yellow"] == []
         assert len(by_level["orange"]) == 1
         assert len(by_level["red"]) == 1
+        assert result["warning_level"] == "yellow"
 
-        assert by_level["yellow"][0]["type"] == "wind"
         assert by_level["orange"][0]["type"] == "thunderstorm"
         assert by_level["red"][0]["type"] == "storm"
 
@@ -179,8 +142,8 @@ class TestAlertParser:
     def test_alert_type_extraction_heat(self) -> None:
         """Test alert type extraction for heat warning."""
         html = """
-        <div class="background selectiveYellow color-darkblue p-2 mt-2 mb-2 rounded inlineWeatherAlert">
-            <a href="/radar#riasztas">Narancs riasztás hőségre</a>
+        <div class="ik genericHourlyAlert">
+            <a class="hover-over" data-bs-content="Narancs riasztás hőségre"></a>
         </div>
         """
         soup = BeautifulSoup(html, "html.parser")
@@ -192,8 +155,8 @@ class TestAlertParser:
     def test_alert_type_extraction_fog(self) -> None:
         """Test alert type extraction for fog warning."""
         html = """
-        <div class="background selectiveYellow color-darkblue p-2 mt-2 mb-2 rounded inlineWeatherAlert">
-            <a href="/radar#riasztas">Sárga riasztás ködre</a>
+        <div class="ik genericHourlyAlert">
+            <a class="hover-over" data-bs-content="Sárga riasztás ködre"></a>
         </div>
         """
         soup = BeautifulSoup(html, "html.parser")

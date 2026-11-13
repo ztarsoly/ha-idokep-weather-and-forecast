@@ -102,6 +102,14 @@
           "orange": "mdi:alert",
           "red": "mdi:alert-octagon"
         }
+      },
+      "warning_level": {
+        "default": "mdi:shield-check-outline",
+        "state": {
+          "yellow": "mdi:alert-circle-outline",
+          "orange": "mdi:alert-circle",
+          "red": "mdi:alert-decagram"
+        }
       }
     },
     "binary_sensor": {

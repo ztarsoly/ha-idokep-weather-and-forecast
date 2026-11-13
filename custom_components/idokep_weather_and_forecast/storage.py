@@ -103,6 +103,7 @@ def _restore_forecast(
     if now - fetched <= MAX_AGE:
         for key in (
             "alerts_by_level",
+            "warning_level",
             "wind_bearing",
             "wind_strength",
             "wind_speed",

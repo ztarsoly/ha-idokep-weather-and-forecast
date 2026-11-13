@@ -125,12 +125,21 @@
                 "name": "Precipitation probability"
             },
             "alert_level": {
-                "name": "Alert level in 24 hours",
+                "name": "Alert in 3 hours",
                 "state": {
                     "none": "No alert",
-                    "yellow": "Yellow",
-                    "orange": "Orange",
-                    "red": "Red"
+                    "yellow": "Yellow alert",
+                    "orange": "Orange alert",
+                    "red": "Red alert"
+                }
+            },
+            "warning_level": {
+                "name": "Warning in 24 hours",
+                "state": {
+                    "none": "No warning",
+                    "yellow": "Yellow warning",
+                    "orange": "Orange warning",
+                    "red": "Red warning"
                 }
             },
             "humidity": {
