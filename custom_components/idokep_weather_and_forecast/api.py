@@ -1074,6 +1074,19 @@ class DailyForecastParser(WeatherParser):
             return None
         return self._today_item
 
+    # Conditions that mean precipitation falls on the day
+    _WET_CONDITIONS = frozenset(
+        {"rainy", "pouring", "snowy", "snowy-rainy", "lightning-rainy", "hail"}
+    )
+
+    @staticmethod
+    def _shows_amount(col: Element) -> bool:
+        """Return True if the column shows a precipitation amount or rain bar."""
+        return (
+            col.find("span", "ik mm") is not None
+            or col.find("div", "rainlevel") is not None
+        )
+
     def _parse_daily_column(self, col: Element, forecast_date: dt.date) -> dict[str, Any]:
         """Parse individual daily forecast column."""
         min_temp, max_temp = self.extract_temperatures(col)
@@ -1083,7 +1096,11 @@ class DailyForecastParser(WeatherParser):
             if text
             else None
         )
-        precipitation = self.extract_precipitation(col)
+        precipitation: float | None = self.extract_precipitation(col)
+        # Only the first days show an amount; a later rainy or snowy day has
+        # none, so its amount is unknown, not 0 (a dry day without one stays 0)
+        if condition in self._WET_CONDITIONS and not self._shows_amount(col):
+            precipitation = None
 
         return {
             "datetime": TimeUtils.day_start(forecast_date),

@@ -2622,3 +2622,48 @@ def test_hourly_list_starts_on_the_right_day(
     assert starts[starts.index(first) + 1] == (
         dt.datetime.fromisoformat(first) + dt.timedelta(hours=1)
     ).isoformat()
+
+
+def _daily_col(alt: str, amount: str | None) -> Element:
+    """Return a daily column with a condition and optionally an amount + bar."""
+    rain = (
+        '<div class="ik rainlevel-container"><a>'
+        f'<span class="ik mm">{amount}</span>'
+        '<div class="ik rainlevel blue" style="height: 5px;"></div></a></div>'
+        if amount is not None
+        else ""
+    )
+    html = (
+        '<div class="ik dailyForecastCol"><div class="ik dfIconAlert">'
+        '<a title="Hétfő<br>2026. december 7." data-bs-content="'
+        "&lt;img class='ik popover-icon' src='/assets/forecastIcons/x.svg' "
+        f"alt='{alt}'&gt;\"></a></div>{rain}</div>"
+    )
+    col = parse_html(html).find("div", "dailyForecastCol")
+    assert col is not None
+    return col
+
+
+@pytest.mark.parametrize(
+    ("alt", "amount", "expected"),
+    [
+        # Later days show no amount at all: a rainy or snowy one is unknown
+        ("eső", None, None),
+        ("havazás", None, None),
+        ("havas eső", None, None),
+        # ... while a dry one (like a dry day nearby) stays 0 mm
+        ("borult", None, 0),
+        ("derült", None, 0),
+        # A shown amount is used as before
+        ("eső", "2 mm", 2.0),
+        ("havazás", "2 cm", 2.0),
+    ],
+)
+def test_daily_precipitation_unknown_on_later_wet_days(
+    alt: str, amount: str | None, expected: float | None
+) -> None:
+    """A wet day without an amount on the page has an unknown amount (None)."""
+    item = DailyForecastParser()._parse_daily_column(
+        _daily_col(alt, amount), dt.date(2026, 12, 7)
+    )
+    assert item["precipitation"] == expected
