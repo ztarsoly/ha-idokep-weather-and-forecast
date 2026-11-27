@@ -133,6 +133,12 @@
             "precipitation_probability": {
                 "name": "Csapadék valószínűsége"
             },
+            "snow_today": {
+                "name": "Várható hó ma"
+            },
+            "snow_tomorrow": {
+                "name": "Várható hó holnap"
+            },
             "alert_level": {
                 "name": "Riasztás 3 órán belül",
                 "state": {

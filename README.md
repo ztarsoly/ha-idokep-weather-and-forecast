@@ -37,7 +37,7 @@ Település nélküli bejegyzésben nincs sem ez a szolgáltatás, sem az entit�
 
 | Entitás | Típus | Megjegyzés |
 |---|---|---|
-| `<Név> Előrejelzés` | időjárás | aktuális állapot, hőmérséklet, szél, becsült széllökés (a becsült szélsebesség 1,75-szerese), páratartalom, harmatpont, hőérzet, légnyomás, UV-index, becsült felhőzet (%), az aktuális óra csapadéka (`precipitation` attribútum, mm); óránkénti és napi előrejelzés (felhőzettel) |
+| `<Név> Előrejelzés` | időjárás | aktuális állapot, hőmérséklet, szél, becsült széllökés (a becsült szélsebesség 1,75-szerese), páratartalom, harmatpont, hőérzet, légnyomás, UV-index, becsült felhőzet (%), az aktuális óra csapadéka (`precipitation` attribútum, mm); óránkénti és napi előrejelzés (felhőzettel; a napi előrejelzésben havazásnál `snow`: a várható hó cm-ben, a `precipitation` mellett) |
 | Hőmérséklet | szenzor (°C) | aktuális |
 | Állapot | szenzor (felsorolás) | pl. napos, derült éjszaka (napnyugta után), borult, eső |
 | Felhőzet | szenzor (%) | **becslés** az aktuális állapot leírásából (0, 25, 50, 75 vagy 100%; lásd lent) |
@@ -50,6 +50,8 @@ Település nélküli bejegyzésben nincs sem ez a szolgáltatás, sem az entit�
 | Széllökés | szenzor (km/h) | **becslés**: a becsült szélsebesség 1,75-szerese |
 | Csapadék | szenzor (mm) | az aktuális óra csapadéka az előrejelzésből (0,1 mm pontossággal) |
 | Csapadék valószínűsége | szenzor (%) | az aktuális óra előrejelzéséből; 0, ha az oldal nem mutat értéket |
+| Várható hó ma | szenzor (cm) | a napi előrejelzésből: az oldal havazásnál centiméterben adja meg a mennyiséget; 0, ha aznapra nem jelez havat; „nem elérhető”, ha a nap mennyisége nem ismert |
+| Várható hó holnap | szenzor (cm) | ugyanez holnapra |
 | Páratartalom | szenzor (%) | a település állomásainak átlaga a páratartalom-térképről (`/para`) |
 | Harmatpont | szenzor (°C) | a település állomásainak átlaga a harmatpont-térképről (`/para`) |
 | Hőérzet | szenzor (°C) | számított a hőmérsékletből, a páratartalomból és a **becsült** szélsebességből (Steadman-képlet, napsugárzás nélkül), minden frissítéskor |

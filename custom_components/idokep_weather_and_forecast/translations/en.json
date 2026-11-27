@@ -133,6 +133,12 @@
             "precipitation_probability": {
                 "name": "Precipitation probability"
             },
+            "snow_today": {
+                "name": "Expected snow today"
+            },
+            "snow_tomorrow": {
+                "name": "Expected snow tomorrow"
+            },
             "alert_level": {
                 "name": "Alert in 3 hours",
                 "state": {

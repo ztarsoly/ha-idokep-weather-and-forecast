@@ -46,6 +46,8 @@ SENSOR_SOURCES = {
     "wind_gust_speed": HOURLY,
     "precipitation": HOURLY,
     "precipitation_probability": HOURLY,
+    "snow_today": HOURLY,
+    "snow_tomorrow": HOURLY,
     "alert_level": HOURLY,
     "warning_level": HOURLY,
     "apparent_temperature": {CURRENT, HOURLY, HUMIDITY_MAP},

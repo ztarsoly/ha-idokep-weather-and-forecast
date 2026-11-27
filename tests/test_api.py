@@ -2091,6 +2091,39 @@ def test_daily_precipitation(text: str, bar_height: int | None, expected: float)
     assert DailyForecastParser().extract_precipitation(col) == expected
 
 
+@pytest.mark.parametrize(
+    ("text", "snow"),
+    [
+        ("2 cm", 2.0),
+        ("0,5 cm", 0.5),
+        ("12cm", 12.0),
+        ("6 mm", None),  # rain: no snow
+        (".", None),
+    ],
+)
+def test_daily_snow(text: str, snow: float | None) -> None:
+    """Snow days' amounts are printed in cm: kept as snow, next to precipitation."""
+    col = parse_html(
+        '<div class="ik dailyForecastCol"><div class="ik rainlevel-container"><a>'
+        f'<span class="ik mm">{text}</span></a></div></div>'
+    ).find("div")
+    assert col is not None
+    parser = DailyForecastParser()
+    assert parser.extract_snow(col) == snow
+    item = parser._parse_daily_column(col, dt.date(2026, 11, 25))
+    assert item.get("snow") == snow
+    # The precipitation is still the printed number (about 1 mm water per cm)
+    if snow is not None:
+        assert item["precipitation"] == snow
+
+
+def test_daily_snow_without_amount() -> None:
+    """A column without any amount has no snow."""
+    col = parse_html('<div class="ik dailyForecastCol"></div>').find("div")
+    assert col is not None
+    assert DailyForecastParser().extract_snow(col) is None
+
+
 def _rain_card(level: str = "", meter: int | None = None) -> Element:
     """Return an hourly card with a rain bar (comment content, meter px)."""
     meter_html = (

@@ -6,7 +6,9 @@
 from __future__ import annotations
 
 import json
+from datetime import date, datetime
 from pathlib import Path
+from typing import Any, ClassVar
 from unittest.mock import Mock, patch
 
 import pytest
@@ -15,6 +17,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 
 from custom_components.idokep_weather_and_forecast.api import (
     WeatherConditionMapper,
@@ -26,6 +29,7 @@ from custom_components.idokep_weather_and_forecast.sensor import (
     IdokepSensor,
     async_setup_entry,
     bearing_to_compass,
+    expected_snow,
 )
 
 TRANSLATIONS_DIR = (
@@ -41,7 +45,7 @@ class TestIdokepSensorEntityDescriptions:
 
     def test_entity_descriptions_count(self) -> None:
         """Test that we have the expected number of entity descriptions."""
-        assert len(ENTITY_DESCRIPTIONS) == 19
+        assert len(ENTITY_DESCRIPTIONS) == 21
 
     def test_entity_descriptions_keys(self) -> None:
         """Test that entity descriptions have the expected keys."""
@@ -65,6 +69,8 @@ class TestIdokepSensorEntityDescriptions:
             "warning_level",
             "apparent_temperature",
             "wind_gust_speed",
+            "snow_today",
+            "snow_tomorrow",
         }
         actual_keys = {desc.key for desc in ENTITY_DESCRIPTIONS}
         assert actual_keys == expected_keys
@@ -570,6 +576,55 @@ class TestTodayMinMaxSensors:
 
         coordinator.data = {}
         assert IdokepSensor(coordinator, max_desc).native_value is None
+
+
+class TestSnowSensors:
+    """Expected snow today and tomorrow (cm), from the daily forecast."""
+
+    DAILY: ClassVar[list[dict[str, Any]]] = [
+        {"datetime": "2026-11-24T00:00:00+01:00", "precipitation": 0},
+        {"datetime": "2026-11-25T00:00:00+01:00", "precipitation": 2.0, "snow": 2.0},
+        {"datetime": "2026-11-26T00:00:00+01:00", "precipitation": None},
+    ]
+
+    @pytest.mark.parametrize("key", ["snow_today", "snow_tomorrow"])
+    def test_description(self, key: str) -> None:
+        """Snow depth in cm, not converted to the mm of precipitation."""
+        desc = next(d for d in ENTITY_DESCRIPTIONS if d.key == key)
+        assert desc.translation_key == key
+        assert desc.device_class == SensorDeviceClass.DISTANCE
+        assert desc.native_unit_of_measurement == "cm"
+        assert desc.state_class is None
+
+    @pytest.mark.parametrize(
+        ("day", "expected"),
+        [
+            ("2026-11-24", 0),  # no snow on the day
+            ("2026-11-25", 2.0),  # "2 cm" on the page
+            ("2026-11-26", None),  # amount unknown
+            ("2026-11-27", None),  # not in the forecast
+        ],
+    )
+    def test_expected_snow(self, day: str, expected: float | None) -> None:
+        """The day's snow, 0 without snow, None when unknown or missing."""
+        assert expected_snow(self.DAILY, date.fromisoformat(day)) == expected
+
+    def test_expected_snow_without_forecast(self) -> None:
+        """No daily forecast: unknown."""
+        assert expected_snow(None, date(2026, 11, 24)) is None
+
+    @pytest.mark.parametrize(
+        ("key", "expected"), [("snow_today", 0), ("snow_tomorrow", 2.0)]
+    )
+    def test_values(self, key: str, expected: float) -> None:
+        """Today's and tomorrow's values, by Home Assistant's local date."""
+        coordinator = Mock()
+        coordinator.config_entry.data = {"location": "Budapest"}
+        coordinator.data = {"daily_forecast": self.DAILY}
+        desc = next(d for d in ENTITY_DESCRIPTIONS if d.key == key)
+        now = datetime(2026, 11, 24, 21, 0, tzinfo=dt_util.get_default_time_zone())
+        with patch.object(dt_util, "now", return_value=now):
+            assert IdokepSensor(coordinator, desc).native_value == expected
 
 
 class TestWindStrengthSensors:

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from datetime import timedelta
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -28,6 +29,7 @@ from homeassistant.const import (
     UnitOfVolumetricFlux,
 )
 from homeassistant.helpers import sun, translation
+from homeassistant.util import dt as dt_util
 
 from . import calculations
 from .api import (
@@ -42,7 +44,7 @@ from .entity import IdokepEntity, IdokepStationEntity
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from datetime import datetime
+    from datetime import date, datetime
 
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -95,6 +97,28 @@ def alert_type_label(hass: HomeAssistant, sensor_key: str, alert_type: str) -> s
         f".state_attributes.{attribute}.state.{alert_type}"
     )
     return translations.get(key, alert_type)
+
+
+# Snow sensors: days from today
+SNOW_DAYS = {"snow_today": 0, "snow_tomorrow": 1}
+
+
+def expected_snow(
+    daily_forecast: list[dict[str, Any]] | None, day: date
+) -> float | None:
+    """
+    Return the expected snowfall (cm) of a day in the daily forecast.
+
+    0 if the day has no snow; None (the sensor is unavailable) if the day is
+    not in the forecast or its precipitation is unknown.
+    """
+    for item in daily_forecast or []:
+        if str(item.get("datetime", ""))[:10] != day.isoformat():
+            continue
+        if "snow" in item:
+            return item["snow"]
+        return None if item.get("precipitation") is None else 0
+    return None
 
 
 def bearing_to_compass(bearing: float | None) -> str | None:
@@ -194,6 +218,22 @@ ENTITY_DESCRIPTIONS = (
         translation_key="precipitation_probability",
         native_unit_of_measurement=PERCENTAGE,
         suggested_display_precision=DISPLAY_PRECISION,
+    ),
+    # Expected snowfall of today and tomorrow (cm), from the daily forecast;
+    # the page gives snow in cm, so it isn't converted to the mm of precipitation
+    SensorEntityDescription(
+        key="snow_today",
+        translation_key="snow_today",
+        native_unit_of_measurement=UnitOfLength.CENTIMETERS,
+        suggested_display_precision=DISPLAY_PRECISION,
+        device_class=SensorDeviceClass.DISTANCE,
+    ),
+    SensorEntityDescription(
+        key="snow_tomorrow",
+        translation_key="snow_tomorrow",
+        native_unit_of_measurement=UnitOfLength.CENTIMETERS,
+        suggested_display_precision=DISPLAY_PRECISION,
+        device_class=SensorDeviceClass.DISTANCE,
     ),
     # The highest level among the hourly cards' alerts (the next 3 hours)
     SensorEntityDescription(
@@ -487,6 +527,9 @@ class IdokepSensor(IdokepEntity, SensorEntity):
         """Return the native value of the sensor."""
         if self.entity_description.key == "wind_direction":
             return bearing_to_compass(self.coordinator.data.get("wind_bearing"))
+        if (days := SNOW_DAYS.get(self.entity_description.key)) is not None:
+            day = dt_util.now().date() + timedelta(days=days)
+            return expected_snow(self.coordinator.data.get("daily_forecast"), day)
         if self.entity_description.key == "alert_level":
             return highest_alert_level(self.coordinator.data.get("alerts"))
         value = self.coordinator.data.get(self.entity_description.key)

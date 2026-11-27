@@ -98,6 +98,8 @@ SOURCE_ENTITIES = {
         "alert_level",
         "warning_level",
         "storm_expected_1h",
+        "snow_today",
+        "snow_tomorrow",
     ),
     HUMIDITY_MAP: ("humidity", "dew_point", "apparent_temperature"),
     PRESSURE_MAP: ("pressure",),

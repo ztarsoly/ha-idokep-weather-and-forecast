@@ -1085,7 +1085,7 @@ class DailyForecastParser(WeatherParser):
         )
         precipitation = self.extract_precipitation(col)
 
-        return {
+        item: dict[str, Any] = {
             "datetime": TimeUtils.day_start(forecast_date),
             "temperature": max_temp,
             "templow": min_temp,
@@ -1093,6 +1093,24 @@ class DailyForecastParser(WeatherParser):
             "cloud_coverage": WeatherConditionMapper.cloud_coverage(text),
             "precipitation": precipitation,
         }
+        # Snowfall is printed in cm ("2 cm"); precipitation stays in mm (water)
+        if (snow := self.extract_snow(col)) is not None:
+            item["snow"] = snow
+        return item
+
+    def extract_snow(self, col: Element) -> float | None:
+        """
+        Return the day's expected snowfall in cm (e.g. "2 cm" -> 2.0).
+
+        The page prints snow days' amounts in cm (with a gray rain bar) and
+        rain in mm. None if the day's amount is not in cm.
+        """
+        precip_span = col.find("span", "ik mm")
+        if precip_span is not None:
+            match = re.search(r"(\d+(?:[.,]\d+)?)\s*cm\b", precip_span.text)
+            if match:
+                return float(match.group(1).replace(",", "."))
+        return None
 
     def extract_temperatures(self, col: Element) -> tuple[int | None, int | None]:
         """

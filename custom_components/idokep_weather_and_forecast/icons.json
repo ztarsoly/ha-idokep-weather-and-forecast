@@ -113,6 +113,12 @@
           "orange": "mdi:alert-circle",
           "red": "mdi:alert-decagram"
         }
+      },
+      "snow_today": {
+        "default": "mdi:snowflake"
+      },
+      "snow_tomorrow": {
+        "default": "mdi:snowflake"
       }
     },
     "binary_sensor": {
