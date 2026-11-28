@@ -1814,7 +1814,7 @@ class TestInterpolatedHours:
             "wind_bearing",
             "native_wind_speed",
         ):
-            assert type(item[key]) is int, key
+            assert isinstance(item[key], int), key
         assert item["precipitation"] == 0.33
         assert item["native_wind_gust_speed"] in WindStrengthMapper.GUSTS.values()
 
