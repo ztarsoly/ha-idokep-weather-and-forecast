@@ -1107,7 +1107,7 @@ async def test_restored_current_hour_has_the_current_estimates(
 @pytest.mark.parametrize(
     ("now", "expected"),
     [
-        (local(2026, 10, 29, 11, 59), False),  # not begun yet
+        (local(2026, 10, 29, 11, 59), True),  # begins later
         (local(2026, 10, 29, 13, 59), True),
         (local(2026, 10, 29, 14, 0), False),  # over
     ],
@@ -1115,7 +1115,7 @@ async def test_restored_current_hour_has_the_current_estimates(
 def test_has_current_forecast(
     coordinator: IdokepDataUpdateCoordinator, now: datetime, expected: bool
 ) -> None:
-    """Only a forecast that has the hour now running counts."""
+    """Only a forecast with the running hour or a later one counts."""
     assert coordinator.has_current_forecast is False
     coordinator._last_forecast = HOURLY_DATA
 

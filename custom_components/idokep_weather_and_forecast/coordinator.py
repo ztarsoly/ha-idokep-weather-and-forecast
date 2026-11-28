@@ -246,8 +246,8 @@ class IdokepDataUpdateCoordinator(DataUpdateCoordinator):
 
     @property
     def has_current_forecast(self) -> bool:
-        """Return True if the forecast kept here has the hour now running."""
-        return running_hour(self._last_forecast, dt_util.utcnow()) is not None
+        """Return True if the forecast kept here has this hour or a later one."""
+        return bool(forecast_as_of(self._last_forecast, dt_util.utcnow()))
 
     async def async_restore(self) -> None:
         """
@@ -255,7 +255,7 @@ class IdokepDataUpdateCoordinator(DataUpdateCoordinator):
 
         Called before the first refresh. It is shown while the forecast page
         can't be downloaded, and the parser takes from it the parts a
-        downloaded page no longer has, the current hour and today (see storage).
+        downloaded page doesn't have, the missing hours and today (see storage).
         """
         self._store = Store(
             self.hass, STORAGE_VERSION, storage_key(self.config_entry.entry_id)

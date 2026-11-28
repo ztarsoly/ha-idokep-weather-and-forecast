@@ -76,7 +76,7 @@ Az integráció entitásai „nem elérhető” (unavailable) állapotúak, ha n
 
 Ha az **aktuális időjárás oldala** nem tölthető le, az időjárás entitás állapota, hőmérséklete és felhőzete az előrejelzés aktuális órájából jön, így az entitás elérhető marad; a vihar szenzor is ezt az órát tekinti az aktuális időjárásnak. A Hőmérséklet, az Állapot, a Felhőzet és a Hőérzet szenzor ilyenkor nem elérhető.
 
-**Kivétel az előrejelzés:** ha az előrejelzési oldal nem tölthető le, az előrejelzés-szenzorok és az időjárás entitás előrejelzése az utolsó sikeresen letöltött (újraindítás után a mentett) előrejelzést követik óráról órára: az aktuális órától és a mai naptól kezdve, a szelet, a csapadékot és a vihart az aktuális órából, a mai max/min értéket a mai napból. Csak akkor nincs előrejelzés, ha a mentettben már nincs benne az aktuális óra. A riasztás és a figyelmeztetés ilyenkor is nem elérhető.
+**Kivétel az előrejelzés:** ha az előrejelzési oldal nem tölthető le, az előrejelzés-szenzorok és az időjárás entitás előrejelzése az utolsó sikeresen letöltött (újraindítás után a mentett) előrejelzést követik óráról órára: az aktuális órától és a mai naptól kezdve, a szelet, a csapadékot és a vihart az aktuális órából, a mai max/min értéket a mai napból. A mentettből hiányzó órák pótlódnak (lásd lentebb), ha van benne az aktuálisnál későbbi óra. Csak akkor nincs előrejelzés, ha a mentettben sem az aktuális, sem későbbi óra nincs. A riasztás és a figyelmeztetés ilyenkor is nem elérhető.
 
 A Felhőzet szenzor és az időjárás entitás felhőzete (`cloud_coverage`) **becslés** az idokep.hu állapotleírásából, mert az oldal nem ad számszerű értéket. A felhőszavak a nyolcadokat követik: derült és napos 0%, gyengén felhős 25%, közepesen felhős 50%, erősen felhős 75%, borult 100%. A tartós eső, hó, ónos eső és köd 100%, a zápor, hózápor, zivatar, hózivatar, villámlás és jégeső 75%, a felhőzetről semmit nem mondó leírások (párás, pára, szeles, hófúvás, porvihar) 50%. Ismeretlen leírásnál nem elérhető.
 
@@ -189,7 +189,7 @@ Az idokep.hu oldalán nincs teendő: az integráció nem hoz létre fiókot, és
 | Radar (`/radar/`) | radarkép | 5 percenként (x:00:59, x:05:59, …) | percenként, amíg új kép nem érkezik (hiba után is) |
 
 - Indításkor (újraindítás, újratöltés, új bejegyzés) minden adat azonnal frissül. Ami ekkor nem sikerül, az percenként újrapróbálódik az első sikeres letöltésig (az előrejelzés is); utána a táblázat szerinti ütemezés érvényes.
-- Ha induláskor semmit sem lehetne mutatni, a bejegyzés nem indul el: a Home Assistant az Eszközök és szolgáltatások oldalon a hiba okával együtt jelzi, és egyre ritkábban (legfeljebb 10 percenként) újrapróbálja. Településsel rendelkező bejegyzésnél ez az az eset, amikor a település egyik oldala sem érhető el, és az aktuális órát tartalmazó mentett előrejelzés sincs; település nélküli bejegyzésnél az, amikor egyik állomás adatfájlja sem tölthető le; a Radar bejegyzésnél az, amikor a radar nem érhető el. Az integráció ilyenkor legfeljebb hibakeresési (debug) szinten ír a naplóba, és azt sem jelzi, ha utána sikerül.
+- Ha induláskor semmit sem lehetne mutatni, a bejegyzés nem indul el: a Home Assistant az Eszközök és szolgáltatások oldalon a hiba okával együtt jelzi, és egyre ritkábban (legfeljebb 10 percenként) újrapróbálja. Településsel rendelkező bejegyzésnél ez az az eset, amikor a település egyik oldala sem érhető el, és az aktuális vagy későbbi órát tartalmazó mentett előrejelzés sincs; település nélküli bejegyzésnél az, amikor egyik állomás adatfájlja sem tölthető le; a Radar bejegyzésnél az, amikor a radar nem érhető el. Az integráció ilyenkor legfeljebb hibakeresési (debug) szinten ír a naplóba, és azt sem jelzi, ha utána sikerül.
 - Ha egy bejegyzés településnevét az idokep.hu nem ismeri (egy korábbi verzió még elmenthetett ilyet), a bejegyzés hibaüzenettel nem indul el, és nem is próbálkozik újra, mert az oldal ilyenkor Budapest időjárását adná. Javítsd a nevet a bejegyzés **Beállítás** (Configure) gombjával. Ez induláskor derül ki; ha az aktuális időjárás oldala épp nem érhető el, az előrejelzési oldal címéből, ha pedig az sem, a következő induláskor.
 - A sikertelen letöltés entitásai „nem elérhető” állapotúak, a korábbi adatot nem mutatják; az előrejelzés a fenti kivétel.
 - Az ütemezett letöltés akkor is megtörténik, ha korábban jön, mint az újrapróbálás (az előrejelzésé teljes órakor).
@@ -206,7 +206,7 @@ Az előrejelzési oldal legutóbbi sikeresen letöltött óránkénti és napi e
 A mentett előrejelzés két célt szolgál, újraindítás után is:
 
 - amíg az előrejelzés nem tölthető le, ez látszik, óráról órára haladva (lásd fent);
-- pótolja a sikeres letöltésekből hiányzó részeket: az aktuális órát, amelyet az idokep.hu már nem listáz (ebből jön az aktuális szél és csapadék), és a mai napot (napi előrejelzés, mai max/min), amelyet az oldal este már nem mutat.
+- pótolja a sikeres letöltésekből hiányzó részeket: az aktuális órától hiányzó órákat (az aktuális órából jön az aktuális szél és csapadék), és a mai napot (napi előrejelzés, mai max/min), amelyet az oldal este már nem mutat.
 
 Minden más adat (aktuális időjárás, riasztások, térképek, állomásmérések, radar) csak a friss letöltésből származik: amíg az nem sikerül, az érintett entitások nem elérhetők.
 
@@ -214,7 +214,12 @@ Minden más adat (aktuális időjárás, riasztások, térképek, állomásmér�
 
 - A szélsebesség a Beaufort-fokozat alsó, a széllökés ennek 1,75-szerese, tehát mindkettő **becslés**; a valódi széllökés ennél nagyobb is lehet. Mért értékeket az időjárás-állomás ad.
 - Este, amikor az idokep.hu már nem mutatja a mai napot, a mai napi előrejelzés és a mai max/min éjfélig megmarad. Ha nincs korábbról ismert mai adat, a mai nap az óránkénti előrejelzés mai óráiból áll össze (legmagasabb és legalacsonyabb hőmérséklet, csapadékösszeg, leggyakoribb időjárás, átlagos felhőzet); ez csak az ott szereplő órákat tükrözi, tehát este a nap hátralévő részét.
-- Az idokep.hu az óránkénti előrejelzést a következő órától listázza; az aktuális óra egy korábbi lekérdezésből megmarad, így az előrejelzés az aktuális órával kezdődik. Ha nincs ilyen korábbi lekérdezés (például közvetlenül a bejegyzés felvétele vagy a település módosítása után), az aktuális órára a következő óra előrejelzése kerül: ez látszik az óránkénti előrejelzés első elemeként, és ebből jön az aktuális szél, csapadék és csapadék valószínűsége (így a hőérzet is).
+- Az idokep.hu az óránkénti előrejelzést a következő órától listázza. Az aktuális órától kezdve minden hiányzó óra pótlódik:
+  - egy korábbi lekérdezésből (mentett előrejelzésből), ha az tartalmazza;
+  - különben, ha nincs előtte meglévő (listázott vagy mentett) óra, az első utána következőnek a másolata (például közvetlenül a bejegyzés felvétele vagy a település módosítása után);
+  - két meglévő óra között (az előtte lévő lehet már elmúlt is) a kettőből interpolálva, a lista szokásos pontosságával (a csapadék két tizedesre, a többi egész számra): a hőmérséklet, a felhőzet, a csapadék, a csapadék valószínűsége, a szélirány (a rövidebb úton) és a szélerősség fokozata (ebből a szélsebesség és a széllökés) arányosan, az időjárás és a vihar jelzése a közelebbi órából (félúton a korábbiból).
+
+  Az óránkénti előrejelzés így az aktuális órával kezdődik, és ebből az órából jön az aktuális szél, csapadék és csapadék valószínűsége (így a hőérzet is).
 - Az állomásadatok az idokep.hu grafikonjai mögötti adatfájlból származnak, ami nem hivatalos felület, és megváltozhat.
 
 ## Köszönetnyilvánítás

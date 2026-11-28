@@ -8,6 +8,7 @@ from __future__ import annotations
 import datetime as dt
 import zoneinfo
 from datetime import datetime
+from typing import ClassVar
 from unittest.mock import AsyncMock, Mock, patch
 
 import aiohttp
@@ -28,6 +29,8 @@ from custom_components.idokep_weather_and_forecast.api import (
     WeatherConditionMapper,
     WindStrengthMapper,
     daily_item_from_hours,
+    filled_hours,
+    interpolated_item,
     station_map_average,
 )
 from custom_components.idokep_weather_and_forecast.failures import FailureRecords
@@ -584,7 +587,8 @@ class TestIdokepApiClientWeatherScraping:
             result = await api_client.async_get_hourly_forecast("Budapest")
 
         assert "hourly_forecast" in result
-        forecast = result["hourly_forecast"]
+        # The cards' items; the hours missing before them depend on the clock
+        forecast = result["hourly_forecast"][-36:]
         assert len(forecast) == 36, "Should have 36 hourly forecast items"
 
         # Verify forecast is sorted chronologically
@@ -688,8 +692,8 @@ class TestIdokepApiClientWeatherScraping:
         ):
             result = await api_client.async_get_hourly_forecast("Budapest")
 
-        forecast = result["hourly_forecast"]
-        assert len(forecast) == 4
+        # The cards' items; the hours missing before them depend on the clock
+        forecast = result["hourly_forecast"][-4:]
 
         # Check chronological order
         dt0 = datetime.fromisoformat(forecast[0]["datetime"])
@@ -1219,9 +1223,10 @@ class TestHourlyParserBranches:
         </div>
         """
         result = parser.parse(parse_html(html))
+        # Hours missing before it are copies, none of the skipped card
         forecast = result["hourly_forecast"]
-        assert len(forecast) == 1
-        assert datetime.fromisoformat(forecast[0]["datetime"]).hour == 15
+        assert {item["temperature"] for item in forecast} == {20}
+        assert datetime.fromisoformat(forecast[-1]["datetime"]).hour == 15
 
     # ---- wind bearing --------------------------------------------------------
 
@@ -1589,25 +1594,300 @@ class TestNextHourStandIn:
 
         assert result["hourly_forecast"][0]["datetime"] == stand_in
 
-    def test_parse_uses_no_hour_further_ahead(
+    def test_every_hour_up_to_the_first_listed_one_is_filled(
         self, parser: HourlyForecastParser
     ) -> None:
-        """Only the next hour can stand in, not a later one."""
+        """Without earlier hours, each is a copy of the first listed one."""
         local_tz = zoneinfo.ZoneInfo("Europe/Budapest")
         result = self._parse_at(
-            parser, dt.datetime(2026, 10, 30, 12, 51, tzinfo=local_tz), ["14:00"]
+            parser, dt.datetime(2026, 10, 30, 12, 51, tzinfo=local_tz), ["15:00"]
         )
 
-        assert [item["datetime"][11:16] for item in result["hourly_forecast"]] == [
-            "14:00"
+        hours = result["hourly_forecast"]
+        assert [item["datetime"][11:16] for item in hours] == [
+            "12:00",
+            "13:00",
+            "14:00",
+            "15:00",
         ]
+        for item in hours[:3]:
+            assert item == {**hours[3], "datetime": item["datetime"]}
+        assert result["wind_bearing"] == 0
+        assert result["precipitation"] == 0
+
+    def test_a_page_whose_hours_are_over_gets_nothing(
+        self, parser: HourlyForecastParser
+    ) -> None:
+        """Only hours before the first listed one are filled, none after it."""
+        local_tz = zoneinfo.ZoneInfo("Europe/Budapest")
+        result = self._parse_at(
+            parser, dt.datetime(2026, 10, 30, 12, 51, tzinfo=local_tz), ["11:00"]
+        )
+
+        assert len(result["hourly_forecast"]) == 1
         assert "wind_bearing" not in result
-        assert "precipitation" not in result
+
+    def test_saved_hours_are_used_for_the_missing_ones(
+        self, parser: HourlyForecastParser
+    ) -> None:
+        """Saved hours are used; those between two are interpolated."""
+        local_tz = zoneinfo.ZoneInfo("Europe/Budapest")
+        saved = [
+            hour_item("2026-10-30T11", wind_bearing=11),
+            hour_item("2026-10-30T12", wind_bearing=12),
+            hour_item("2026-10-30T14", wind_bearing=14),
+        ]
+        parser.restore_hourly_forecast(saved)
+
+        result = self._parse_at(
+            parser, dt.datetime(2026, 10, 30, 12, 51, tzinfo=local_tz), ["16:00"]
+        )
+
+        noon, one, two, three, _ = result["hourly_forecast"]
+        assert (noon, two) == (saved[1], saved[2])
+        # Halfway between 12:00 and 14:00, then between 14:00 and the listed
+        assert one == hour_item("2026-10-30T13", wind_bearing=13)
+        assert three == hour_item("2026-10-30T15", wind_bearing=7)
+        assert result["wind_bearing"] == 12
+
+    def test_the_first_missing_hours_copy_the_first_saved_one(
+        self, parser: HourlyForecastParser
+    ) -> None:
+        """With nothing earlier they can't be interpolated."""
+        local_tz = zoneinfo.ZoneInfo("Europe/Budapest")
+        first = hour_item("2026-10-30T14", wind_bearing=40)
+        parser.restore_hourly_forecast([first])
+
+        result = self._parse_at(
+            parser, dt.datetime(2026, 10, 30, 12, 30, tzinfo=local_tz), ["16:00"]
+        )
+
+        noon, one, two, three, _ = result["hourly_forecast"]
+        assert noon == hour_item("2026-10-30T12", wind_bearing=40)
+        assert one == hour_item("2026-10-30T13", wind_bearing=40)
+        assert two == first
+        assert three == hour_item("2026-10-30T15", wind_bearing=20)
+
+    def test_saved_hours_already_over_are_interpolated_from(
+        self, parser: HourlyForecastParser
+    ) -> None:
+        """The running hour comes from an earlier and a later one."""
+        local_tz = zoneinfo.ZoneInfo("Europe/Budapest")
+        parser.restore_hourly_forecast(
+            [
+                hour_item("2026-10-30T09", wind_bearing=300),
+                hour_item("2026-10-30T11", wind_bearing=40),
+            ]
+        )
+
+        result = self._parse_at(
+            parser,
+            dt.datetime(2026, 10, 30, 12, 30, tzinfo=local_tz),
+            ["13:00"],
+            first_angle=100,
+        )
+
+        # Halfway from 11:00 to 13:00; the hours over aren't listed
+        noon, listed = result["hourly_forecast"]
+        assert noon == hour_item("2026-10-30T12", wind_bearing=70)
+        assert listed["datetime"] == "2026-10-30T13:00:00+01:00"
+        assert result["wind_bearing"] == 70
+
+    def test_hours_the_page_skips_are_interpolated(
+        self, parser: HourlyForecastParser
+    ) -> None:
+        """A gap between listed hours is filled from both of its ends."""
+        local_tz = zoneinfo.ZoneInfo("Europe/Budapest")
+        result = self._parse_at(
+            parser,
+            dt.datetime(2026, 10, 30, 12, 51, tzinfo=local_tz),
+            ["13:00", "17:00"],
+        )
+
+        hours = result["hourly_forecast"]
+        assert [item["datetime"][11:16] for item in hours] == [
+            "12:00",
+            "13:00",
+            "14:00",
+            "15:00",
+            "16:00",
+            "17:00",
+        ]
+        # The current hour is a copy of the first listed one
+        assert [item["wind_bearing"] for item in hours] == [0, 0, 23, 45, 68, 90]
 
 
 def hour_item(start: str, **values: object) -> dict:
     """Return an hourly item starting at "2026-10-30T20" and the like."""
     return {"datetime": f"{start}:00:00+01:00", **values}
+
+
+class TestInterpolatedHours:
+    """Hours missing between two available ones."""
+
+    BEFORE: ClassVar[dict] = {
+        "datetime": "2026-10-30T12:00:00+01:00",
+        "temperature": 10,
+        "condition": "sunny",
+        "cloud_coverage": 0,
+        "precipitation": 0,
+        "precipitation_probability": 0,
+        "wind_bearing": 350,
+        "wind_strength": "gentle_breeze",
+        "native_wind_speed": 12,
+        "native_wind_gust_speed": 21.0,
+    }
+    AFTER: ClassVar[dict] = {
+        "storm": True,
+        "datetime": "2026-10-30T16:00:00+01:00",
+        "temperature": 20,
+        "condition": "lightning-rainy",
+        "cloud_coverage": 100,
+        "precipitation": 1.0,
+        "precipitation_probability": 60,
+        "wind_bearing": 30,
+        "wind_strength": "strong_breeze",
+        "native_wind_speed": 39,
+        "native_wind_gust_speed": 68.25,
+    }
+
+    @pytest.mark.parametrize(
+        ("share", "expected"),
+        [
+            pytest.param(
+                0.25,
+                (13, "sunny", 25, 0.25, 15, 0, "moderate_breeze", 20, 35.0),
+                id="nearer-the-first",
+            ),
+            pytest.param(
+                0.75,
+                (18, "lightning-rainy", 75, 0.75, 45, 20, "fresh_breeze", 29, 50.75),
+                id="nearer-the-last",
+            ),
+        ],
+    )
+    def test_values_between_two_hours(self, share: float, expected: tuple) -> None:
+        """Numbers go from one to the other, the wind by its level."""
+        item = interpolated_item(self.BEFORE, self.AFTER, share)
+
+        assert (
+            item["temperature"],
+            item["condition"],
+            item["cloud_coverage"],
+            item["precipitation"],
+            item["precipitation_probability"],
+            item["wind_bearing"],
+            item["wind_strength"],
+            item["native_wind_speed"],
+            item["native_wind_gust_speed"],
+        ) == expected
+        assert item.get("storm", False) is (share > 0.5)
+
+    @pytest.mark.parametrize(
+        ("first", "last", "expected"),
+        [
+            pytest.param(0.2, 0.3, 0.25, id="between-two-tenths"),
+            pytest.param(0.01, 0.02, 0.02, id="half-a-hundredth-goes-up"),
+            pytest.param(0, 0, 0, id="dry"),
+            pytest.param(0, 0.008, 0, id="under-half-a-hundredth"),
+        ],
+    )
+    def test_the_precipitation_has_two_decimals(
+        self, first: float, last: float, expected: float
+    ) -> None:
+        """Halves go up; none at all is 0, as on the page."""
+        item = interpolated_item(
+            {"precipitation": first}, {"precipitation": last}, 0.5
+        )
+
+        assert item["precipitation"] == expected
+        assert isinstance(item["precipitation"], type(expected))
+
+    def test_the_numbers_are_of_the_listed_kinds(self) -> None:
+        """Whole numbers stay whole ones, the gust is its level's."""
+        item = interpolated_item(self.BEFORE, self.AFTER, 1 / 3)
+
+        for key in (
+            "temperature",
+            "cloud_coverage",
+            "precipitation_probability",
+            "wind_bearing",
+            "native_wind_speed",
+        ):
+            assert type(item[key]) is int, key
+        assert item["precipitation"] == 0.33
+        assert item["native_wind_gust_speed"] in WindStrengthMapper.GUSTS.values()
+
+    def test_halfway_the_condition_is_the_earlier_ones(self) -> None:
+        """Halfway between two hours the earlier one's words are used."""
+        item = interpolated_item(self.BEFORE, self.AFTER, 0.5)
+
+        assert item["condition"] == "sunny"
+        assert "storm" not in item
+
+    @pytest.mark.parametrize("share", [0.25, 0.75])
+    def test_a_value_one_hour_lacks_is_the_nearer_ones(self, share: float) -> None:
+        """Nothing is made up from a single value."""
+        lacking = {
+            **self.BEFORE,
+            "temperature": None,
+            "wind_bearing": None,
+            "wind_strength": None,
+            "native_wind_speed": None,
+        }
+
+        item = interpolated_item(lacking, self.AFTER, share)
+
+        nearer = lacking if share < 0.5 else self.AFTER
+        for key in (
+            "temperature",
+            "wind_bearing",
+            "wind_strength",
+            "native_wind_speed",
+        ):
+            assert item[key] == nearer[key]
+
+    def test_an_unknown_wind_level_is_not_interpolated(self) -> None:
+        """A saved word that is no level leaves the wind as the nearer one's."""
+        odd = {**self.BEFORE, "wind_strength": "breezy", "native_wind_speed": 3}
+
+        item = interpolated_item(odd, self.AFTER, 0.25)
+
+        assert (item["wind_strength"], item["native_wind_speed"]) == ("breezy", 3)
+
+    def test_each_hour_is_interpolated_from_the_available_ones(self) -> None:
+        """Not from the hours filled before it."""
+        listed = [
+            hour_item("2026-10-30T13", condition="sunny"),
+            hour_item("2026-10-30T17", condition="rainy"),
+        ]
+        now = dt.datetime.fromisoformat("2026-10-30T13:30:00+01:00")
+
+        hours = filled_hours(listed, [], now)
+
+        assert [item["condition"] for item in hours] == [
+            "sunny",
+            "sunny",
+            "sunny",
+            "rainy",
+            "rainy",
+        ]
+
+    def test_the_hour_repeated_when_the_clocks_go_back(self) -> None:
+        """Listed only once, its second time is filled in."""
+        listed = [
+            {"datetime": "2026-10-25T02:00:00+02:00", "temperature": 8},
+            {"datetime": "2026-10-25T03:00:00+01:00", "temperature": 6},
+        ]
+        now = dt.datetime.fromisoformat("2026-10-25T02:30:00+02:00")
+
+        hours = filled_hours(listed, [], now)
+
+        assert len(hours) == 3
+        assert hours[1] == {
+            "datetime": "2026-10-25T02:00:00+01:00",
+            "temperature": 7,
+        }
 
 
 class TestTodayFromHours:
@@ -1721,7 +2001,9 @@ class TestTodayFromHours:
         client = IdokepApiClient(Mock(spec=aiohttp.ClientSession))
 
         first = await self._download(
-            client, self._cards(("21:00", 6), ("22:00", 3), ("0:00", -2)), 20
+            client,
+            self._cards(("21:00", 6), ("22:00", 3), ("23:00", 4), ("0:00", -2)),
+            20,
         )
         later = await self._download(
             client, self._cards(("23:00", 1), ("0:00", -2)), 22
@@ -1925,7 +2207,7 @@ class TestPerPageFetchers:
             result = await api_client.async_get_hourly_forecast("Budapest")
 
         get_html.assert_awaited_once_with("https://www.idokep.hu/elorejelzes/Budapest")
-        assert len(result["hourly_forecast"]) == 1
+        assert result["hourly_forecast"][-1]["temperature"] == 13
         assert result["alerts"] == []
         assert result["warnings"] == []
 
@@ -2405,7 +2687,8 @@ def test_current_hour_skips_unusable_kept_items() -> None:
     forecast = [{"datetime": "2026-11-03T09:00:00+01:00", "temperature": 8}]
     now = dt.datetime(2026, 11, 3, 8, 30, tzinfo=tz)
 
-    assert parser._with_current_hour(forecast, now) == [current, *forecast]
+    known = parser._last_forecast
+    assert filled_hours(forecast, known, now) == [current, *forecast]
 
 
 def test_hourly_card_without_temperature_is_skipped() -> None:

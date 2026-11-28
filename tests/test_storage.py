@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import zoneinfo
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from typing import TYPE_CHECKING
 
 import pytest
@@ -185,13 +185,54 @@ def test_forecast_as_of() -> None:
     }
 
 
-@pytest.mark.parametrize(
-    "now",
-    [at(18, 59), at(22), at(20, day=30), at(20) - timedelta(days=3)],
-)
-def test_forecast_as_of_without_the_running_hour(now: datetime) -> None:
-    """A forecast that doesn't have the running hour gives nothing."""
+@pytest.mark.parametrize("now", [at(22), at(20, day=30)])
+def test_forecast_as_of_a_forecast_that_is_over(now: datetime) -> None:
+    """With neither the running hour nor a later one there is nothing."""
     assert forecast_as_of(FOLLOWED, now) == {}
+
+
+def test_forecast_as_of_fills_the_hours_before_the_first_kept_one() -> None:
+    """From the running hour on, the first kept hour's values fill the gap."""
+    result = forecast_as_of(FOLLOWED, at(17, 30))
+
+    first = FOLLOWED["hourly_forecast"][2]
+    hours = result["hourly_forecast"]
+    assert hours[:2] == [
+        {**first, "datetime": "2026-10-29T17:00:00+01:00"},
+        {**first, "datetime": "2026-10-29T18:00:00+01:00"},
+    ]
+    assert hours[2:] == FOLLOWED["hourly_forecast"][2:]
+    assert result["wind_bearing"] == 90
+
+
+def test_forecast_as_of_interpolates_between_the_kept_hours() -> None:
+    """Hours the saved forecast lacks come from the hours around them."""
+    forecast = {
+        "hourly_forecast": [
+            {"datetime": "2026-10-29T20:00:00+01:00", "temperature": 9},
+            {"datetime": "2026-10-29T23:00:00+01:00", "temperature": 3},
+        ]
+    }
+
+    result = forecast_as_of(forecast, at(20, 30))
+
+    assert [item["temperature"] for item in result["hourly_forecast"]] == [9, 7, 5, 3]
+    assert result["temperature_max_today"] == 9
+    assert result["temperature_min_today"] == 3
+
+
+def test_forecast_as_of_interpolates_from_an_hour_that_is_over() -> None:
+    """A missing running hour comes from the hours before and after it."""
+    forecast = {
+        "hourly_forecast": [
+            {"datetime": "2026-10-29T19:00:00+01:00", "temperature": 11},
+            {"datetime": "2026-10-29T21:00:00+01:00", "temperature": 7},
+        ]
+    }
+
+    result = forecast_as_of(forecast, at(20, 30))
+
+    assert [item["temperature"] for item in result["hourly_forecast"]] == [9, 7]
 
 
 def test_forecast_as_of_without_a_forecast() -> None:
@@ -206,6 +247,8 @@ def test_forecast_as_of_makes_a_missing_today_from_its_hours() -> None:
             {"datetime": "2026-10-29T19:00:00+01:00", "temperature": 11},
             {"datetime": "2026-10-29T20:00:00+01:00", "temperature": 9},
             {"datetime": "2026-10-29T21:00:00+01:00", "temperature": 8},
+            {"datetime": "2026-10-29T22:00:00+01:00", "temperature": 10},
+            {"datetime": "2026-10-29T23:00:00+01:00", "temperature": 10},
             {"datetime": "2026-10-30T00:00:00+01:00", "temperature": 2},
         ],
         "daily_forecast": [FOLLOWED["daily_forecast"][2]],

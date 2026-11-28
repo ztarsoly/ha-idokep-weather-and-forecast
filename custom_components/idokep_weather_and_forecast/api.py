@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import bisect
 import contextlib
 import datetime as dt
 import html
+import math
 import re
 import socket
 import unicodedata
 import zoneinfo
 from abc import ABC, abstractmethod
 from collections import Counter
+from operator import itemgetter
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import aiohttp
@@ -618,20 +621,130 @@ def current_hour_values(item: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
+def hour_start(item: dict[str, Any]) -> dt.datetime | None:
+    """Return an hourly item's start (None without a readable aware time)."""
+    try:
+        start = dt.datetime.fromisoformat(item["datetime"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    return start if start.tzinfo is not None else None
+
+
+def _half_up(value: float) -> int:
+    """Round to a whole number, a half upwards."""
+    return math.floor(value + 0.5)
+
+
+def interpolated_item(
+    before: dict[str, Any], after: dict[str, Any], share: float
+) -> dict[str, Any]:
+    """
+    Return the values a share (0-1) of the way between two hourly items.
+
+    Numbers are interpolated, the precipitation to two decimals (0 without
+    any) and the others to whole numbers, as the page's hours have them. The
+    wind direction goes the shorter way round, the wind by its strength level,
+    which gives its speed and gust. The condition, and a value that one of the
+    two lacks, are the nearer one's (the earlier one's halfway). The datetime
+    is left to the caller.
+    """
+    result = dict(before if share <= 1 / 2 else after)
+
+    def ends(key: str) -> tuple[Any, Any] | None:
+        pair = before.get(key), after.get(key)
+        return None if None in pair else pair
+
+    def between(pair: tuple[Any, Any]) -> float:
+        return pair[0] + (pair[1] - pair[0]) * share
+
+    for key in ("temperature", "cloud_coverage", "precipitation_probability"):
+        if pair := ends(key):
+            result[key] = _half_up(between(pair))
+    if pair := ends("precipitation"):
+        # Rounded first, as halves such as 0.015 aren't exact in binary
+        hundredths = _half_up(round(between(pair) * 100, 6))
+        result["precipitation"] = hundredths / 100 if hundredths else 0
+    if pair := ends("wind_bearing"):
+        turn = (pair[1] - pair[0] + 180) % 360 - 180
+        result["wind_bearing"] = _half_up(pair[0] + turn * share) % 360
+    levels = WindStrengthMapper.levels()
+    if (pair := ends("wind_strength")) and all(level in levels for level in pair):
+        low, high = (levels.index(level) for level in pair)
+        level = levels[_half_up(low + (high - low) * share)]
+        result["wind_strength"] = level
+        result["native_wind_speed"] = WindStrengthMapper.SPEEDS[level]
+        result["native_wind_gust_speed"] = WindStrengthMapper.GUSTS[level]
+    return result
+
+
+def filled_hours(
+    listed: list[dict[str, Any]], saved: list[dict[str, Any]], now: dt.datetime
+) -> list[dict[str, Any]]:
+    """
+    Return a forecast's hourly items with none missing from the running hour on.
+
+    The hours missing up to the last listed one are added. Each is the saved
+    (earlier downloaded) item of its hour if there is one. Else it is
+    interpolated between the listed or saved hours around it, hours already
+    over included; with none before it, it is a copy of the first one after it.
+    """
+    one_hour = dt.timedelta(hours=1)
+    # Every available item by its start, a listed one rather than a saved one
+    known = {
+        start: item
+        for item in [*saved, *listed]
+        if (start := hour_start(item)) is not None
+    }
+    available = sorted(known.items())
+    # Counted in UTC, so that a change of the clocks doesn't matter
+    hour = now.astimezone(dt.UTC).replace(minute=0, second=0, microsecond=0)
+    result: list[dict[str, Any]] = []
+    for item in listed:
+        start = dt.datetime.fromisoformat(item["datetime"])
+        while hour < start:
+            if hour in known:
+                result.append(known[hour])
+            else:
+                local = hour.astimezone(TimeUtils.get_local_timezone())
+                values = _missing_values(hour, available)
+                result.append({**values, "datetime": local.isoformat()})
+            hour += one_hour
+        result.append(item)
+        if start >= hour:
+            hour = start + one_hour
+    return result
+
+
+def _missing_values(
+    hour: dt.datetime, available: list[tuple[dt.datetime, dict[str, Any]]]
+) -> dict[str, Any]:
+    """
+    Return the values of an hour that no available (start, item) is of.
+
+    The items are sorted by their start and at least one is later than the hour.
+    """
+    index = bisect.bisect_left(available, hour, key=itemgetter(0))
+    end, after = available[index]
+    if not index:
+        return after
+    start, before = available[index - 1]
+    return interpolated_item(before, after, (hour - start) / (end - start))
+
+
 class HourlyForecastParser(WeatherParser):
     """
     Parser for hourly forecast data.
 
     idokep.hu lists only the coming hours (at 12:51 the list starts at
-    13:00). The current hour's entry seen on an earlier fetch is kept and
-    still reported first until the hour ends. Without it, e.g. right after
-    the entry was added, a copy of the next hour's entry stands in for it.
+    13:00). The hours missing from the current one on are added (see
+    filled_hours): from an earlier fetch, or from the hours around them, e.g.
+    a copy of the next hour right after the entry was added.
     """
 
     def __init__(self, records: FailureRecords | None = None) -> None:
         """Initialize the parser."""
         super().__init__(records)
-        # Hourly items of the last parse, to keep the current hour from
+        # Hourly items of the last parse, to keep the hours missing from
         self._last_forecast: list[dict[str, Any]] = []
 
     def parse(self, page: Element) -> dict[str, Any]:
@@ -679,7 +792,7 @@ class HourlyForecastParser(WeatherParser):
                 forecast.append(forecast_item)
 
         if forecast:
-            forecast = self._with_current_hour(forecast, now)
+            forecast = filled_hours(forecast, self._last_forecast, now)
             self._last_forecast = forecast
             result["hourly_forecast"] = forecast
             result["storm_expected"] = self.storm_expected(forecast, now)
@@ -699,37 +812,8 @@ class HourlyForecastParser(WeatherParser):
         return now.hour - first_hour > 12
 
     def restore_hourly_forecast(self, items: list[dict[str, Any]]) -> None:
-        """Seed the hourly items restored from disk (to keep the current hour)."""
+        """Seed the hourly items restored from disk (for the missing hours)."""
         self._last_forecast = list(items)
-
-    def _with_current_hour(
-        self, forecast: list[dict[str, Any]], now: dt.datetime
-    ) -> list[dict[str, Any]]:
-        """
-        Return the forecast with the current hour put first if the page lacks it.
-
-        The item kept from an earlier download; without one, the next hour's
-        with the current hour's time.
-        """
-        first_start = dt.datetime.fromisoformat(forecast[0]["datetime"])
-        if first_start <= now:
-            return forecast
-        for item in self._last_forecast:
-            try:
-                start = dt.datetime.fromisoformat(item["datetime"])
-            except (KeyError, TypeError, ValueError):
-                continue
-            if start.tzinfo is None:
-                continue
-            # The page starts after now, so this slot is before its first one
-            if start <= now < start + dt.timedelta(hours=1):
-                return [item, *forecast]
-        if first_start - now > dt.timedelta(hours=1):
-            return forecast  # the first hour listed isn't the next one
-        # Subtracted in UTC, so that a change of the clocks doesn't matter
-        start = first_start.astimezone(dt.UTC) - dt.timedelta(hours=1)
-        stand_in = start.astimezone(TimeUtils.get_local_timezone()).isoformat()
-        return [{**forecast[0], "datetime": stand_in}, *forecast]
 
     @staticmethod
     def storm_expected(forecast: list[dict[str, Any]], now: dt.datetime) -> bool:
@@ -1463,7 +1547,7 @@ class IdokepApiClient:
         self._daily_parser.restore_today_forecast(item)
 
     def restore_hourly_forecast(self, items: list[dict[str, Any]]) -> None:
-        """Seed the hourly items restored from disk (keeps the current hour)."""
+        """Seed the hourly items restored from disk (for the missing hours)."""
         self._hourly_parser.restore_hourly_forecast(items)
 
     async def _get_page(self, url: str) -> Element:

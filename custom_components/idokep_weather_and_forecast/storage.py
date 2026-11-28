@@ -7,9 +7,10 @@ It is used in two ways:
 
 - while the page can't be downloaded, also after a restart, the forecast shown
   is the last one, followed hour by hour (forecast_as_of)
-- the page no longer lists the hour now running, and in the evening it no
-  longer shows today: the parser adds both to a successful download (without
-  an earlier one it makes them from the next hour and today's hours)
+- the page lists only the coming hours, and in the evening it no longer
+  shows today: the parser adds the missing hours and today to a successful
+  download (what no earlier one had comes from the hours around the missing
+  ones and from today's hours)
 """
 
 from __future__ import annotations
@@ -25,6 +26,8 @@ from .api import (
     WindStrengthMapper,
     current_hour_values,
     daily_item_from_hours,
+    filled_hours,
+    hour_start,
 )
 from .const import DOMAIN, HOURLY
 
@@ -88,7 +91,7 @@ def today_item(forecast: dict[str, Any], today: date) -> dict[str, Any] | None:
 def running_hour(forecast: dict[str, Any], now: datetime) -> dict[str, Any] | None:
     """Return the forecast's hourly item whose hour contains now, if there is one."""
     for item in forecast.get("hourly_forecast", []):
-        start = _start(item)
+        start = hour_start(item)
         if start is not None and start <= now < start + timedelta(hours=1):
             return item
     return None
@@ -100,17 +103,18 @@ def forecast_as_of(forecast: dict[str, Any], now: datetime) -> dict[str, Any]:
 
     The hours from the one now running, the days from today, today's max/min,
     and the current wind, precipitation and storm value from the running hour.
-    Alerts and warnings are not part of it. A missing today is made from its
-    hours. Empty if the forecast doesn't have the hour now running.
+    Alerts and warnings are not part of it. Missing hours are added (see
+    filled_hours), and a missing today is made from its hours. Empty if the
+    forecast has neither the hour now running nor a later one.
     """
-    hours = [
-        (start, item)
-        for item in forecast.get("hourly_forecast", [])
-        if (start := _start(item)) is not None and start + timedelta(hours=1) > now
-    ]
-    if not hours or hours[0][0] > now:
+    past: list[dict[str, Any]] = []
+    coming: list[dict[str, Any]] = []
+    for item in forecast.get("hourly_forecast", []):
+        if (start := hour_start(item)) is not None:
+            (coming if start + timedelta(hours=1) > now else past).append(item)
+    if not coming:
         return {}
-    hourly = [item for _, item in hours]
+    hourly = filled_hours(coming, past, now)
 
     today = dt_util.as_local(now).date()
     result: dict[str, Any] = {
@@ -125,7 +129,7 @@ def forecast_as_of(forecast: dict[str, Any], now: datetime) -> dict[str, Any]:
     ]
     item = today_item(forecast, today)
     if item is None:
-        item = daily_item_from_hours(forecast["hourly_forecast"], today)
+        item = daily_item_from_hours([*past, *hourly], today)
         if item is not None:
             daily.insert(0, item)
     if daily:
@@ -135,15 +139,6 @@ def forecast_as_of(forecast: dict[str, Any], now: datetime) -> dict[str, Any]:
             if item.get(value_key) is not None:
                 result[key] = item[value_key]
     return result
-
-
-def _start(item: dict[str, Any]) -> datetime | None:
-    """Return an hourly item's start (None without a readable aware time)."""
-    try:
-        start = datetime.fromisoformat(item["datetime"])
-    except (KeyError, TypeError, ValueError):
-        return None
-    return start if start.tzinfo is not None else None
 
 
 def _day(item: dict[str, Any]) -> date | None:
