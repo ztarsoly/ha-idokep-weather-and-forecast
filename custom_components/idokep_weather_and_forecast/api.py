@@ -645,10 +645,10 @@ def interpolated_item(
     any) and the others to whole numbers, as the page's hours have them. The
     wind direction goes the shorter way round, the wind by its strength level,
     which gives its speed and gust. The condition, and a value that one of the
-    two lacks, are the nearer one's (the earlier one's halfway). The datetime
+    two lacks, are the nearer one's (the later one's halfway). The datetime
     is left to the caller.
     """
-    result = dict(before if share <= 1 / 2 else after)
+    result = dict(before if share < 1 / 2 else after)
 
     def ends(key: str) -> tuple[Any, Any] | None:
         pair = before.get(key), after.get(key)

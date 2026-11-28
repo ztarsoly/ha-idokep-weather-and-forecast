@@ -8,7 +8,7 @@
                     "station": "Időjárás-állomások kódjai (nem kötelező)",
                     "merge_method": "Összevonás módja",
                     "max_age": "Mérés maximális kora",
-                    "add_radar": "Országos radar"
+                    "add_radar": "Országos radarkép"
                 },
                 "data_description": {
                     "name": "A bejegyzés és szolgáltatásai neve (pl. Otthon).",
@@ -28,7 +28,7 @@
             "station_connection": "Az idokep.hu nem érhető el ehhez a kódhoz: {code}. Ellenőrizd a kapcsolatot.",
             "name": "Adj meg egy nevet.",
             "nothing": "Adj meg egy települést vagy egy állomáskódot.",
-            "nothing_or_radar": "Adj meg egy települést vagy egy állomáskódot. Ha csak a radart szeretnéd, a nevet is hagyd üresen, az Országos radar pedig maradjon bejelölve."
+            "nothing_or_radar": "Adj meg egy települést vagy egy állomáskódot. Ha csak a radart szeretnéd, a nevet is hagyd üresen, az Országos radarkép pedig maradjon bejelölve."
         },
         "abort": {
             "already_configured": "Ez a bejegyzés már konfigurálva van.",

@@ -115,7 +115,7 @@ Minden szenzor `stations` attribútuma mutatja, melyik állomás(ok)tól szárma
 
 ### `Országos Radarkép` (National Radar Image) – Radar szolgáltatás
 
-Amíg nincs **Radar** bejegyzés, a beállítás űrlapján megjelenik az **Országos radar** jelölőnégyzet (alapból bejelölve); bejelölve létrejön egy **Radar** bejegyzés egy kép entitással (**Országos radarkép**, angolul National radar image). Ez az országos radar utolsó 6 képéből készült animált GIF (képenként 1 mp, az utolsón 2 mp). Ha törlöd, magától nem jön létre újra, a jelölőnégyzet viszont ismét megjelenik. Később úgy veheted fel, hogy új bejegyzést adsz hozzá, és a nevet, a települést és az állomáskódokat üresen hagyod. A kikapcsolt Radar bejegyzés is meglévőnek számít (nincs jelölőnégyzet); ha kell, kapcsold be. Ha a letöltés nem sikerül, a kép nem elérhető, amíg egy letöltés újra nem sikerül; ekkor mind a 6 képet újra letölti.
+Amíg nincs **Radar** bejegyzés, a beállítás űrlapján megjelenik az **Országos radarkép** jelölőnégyzet (alapból bejelölve); bejelölve létrejön egy **Radar** bejegyzés egy kép entitással (**Országos radarkép**, angolul National radar image). Ez az országos radar utolsó 6 képéből készült animált GIF (képenként 1 mp, az utolsón 2 mp). Ha törlöd, magától nem jön létre újra, a jelölőnégyzet viszont ismét megjelenik. Később úgy veheted fel, hogy új bejegyzést adsz hozzá, és a nevet, a települést és az állomáskódokat üresen hagyod. A kikapcsolt Radar bejegyzés is meglévőnek számít (nincs jelölőnégyzet); ha kell, kapcsold be. Ha a letöltés nem sikerül, a kép nem elérhető, amíg egy letöltés újra nem sikerül; ekkor mind a 6 képet újra letölti.
 
 ## Telepítés
 
@@ -145,7 +145,7 @@ Frissítéshez töröld a `custom_components/idokep_weather_and_forecast` mappá
 | Időjárás-állomások kódjai | nem* | Egy vagy több idokep.hu automata kódja fontossági sorrendben, pl. `jozsamet` (`https://www.idokep.hu/automata/jozsamet`) |
 | Összevonás módja | nem | Prioritás (alapértelmezett), Legfrissebb vagy Átlag – lásd fent |
 | Mérés maximális kora | nem | Az ennél régebbi állomásmérés nem számít, percben (1–1440, alapból 60) |
-| Országos radar | nem | Jelölőnégyzet, csak akkor látszik, ha még nincs **Radar** bejegyzés; alapból bejelölve, és ekkor felveszi |
+| Országos radarkép | nem | Jelölőnégyzet, csak akkor látszik, ha még nincs **Radar** bejegyzés; alapból bejelölve, és ekkor felveszi |
 
 \* A névhez a település vagy legalább egy állomáskód is kell. Ha csak a radart szeretnéd, hagyd üresen a nevet, a települést és az állomáskódokat, és a jelölőnégyzet maradjon bejelölve.
 
@@ -217,7 +217,7 @@ Minden más adat (aktuális időjárás, riasztások, térképek, állomásmér�
 - Az idokep.hu az óránkénti előrejelzést a következő órától listázza. Az aktuális órától kezdve minden hiányzó óra pótlódik:
   - egy korábbi lekérdezésből (mentett előrejelzésből), ha az tartalmazza;
   - különben, ha nincs előtte meglévő (listázott vagy mentett) óra, az első utána következőnek a másolata (például közvetlenül a bejegyzés felvétele vagy a település módosítása után);
-  - két meglévő óra között (az előtte lévő lehet már elmúlt is) a kettőből interpolálva, a lista szokásos pontosságával (a csapadék két tizedesre, a többi egész számra): a hőmérséklet, a felhőzet, a csapadék, a csapadék valószínűsége, a szélirány (a rövidebb úton) és a szélerősség fokozata (ebből a szélsebesség és a széllökés) arányosan, az időjárás és a vihar jelzése a közelebbi órából (félúton a korábbiból).
+  - két meglévő óra között (az előtte lévő lehet már elmúlt is) a kettőből interpolálva, a lista szokásos pontosságával (a csapadék két tizedesre, a többi egész számra): a hőmérséklet, a felhőzet, a csapadék, a csapadék valószínűsége, a szélirány (a rövidebb úton) és a szélerősség fokozata (ebből a szélsebesség és a széllökés) arányosan, az időjárás és a vihar jelzése a közelebbi órából (félúton a későbbiből).
 
   Az óránkénti előrejelzés így az aktuális órával kezdődik, és ebből az órából jön az aktuális szél, csapadék és csapadék valószínűsége (így a hőérzet is).
 - Az állomásadatok az idokep.hu grafikonjai mögötti adatfájlból származnak, ami nem hivatalos felület, és megváltozhat.

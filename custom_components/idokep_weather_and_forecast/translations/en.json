@@ -8,7 +8,7 @@
                     "station": "Weather station codes (optional)",
                     "merge_method": "Merge method",
                     "max_age": "Maximum reading age",
-                    "add_radar": "National radar"
+                    "add_radar": "National radar image"
                 },
                 "data_description": {
                     "name": "The name of this entry and its services (e.g. Home).",
@@ -28,7 +28,7 @@
             "station_connection": "Could not reach idokep.hu for the code {code}. Check your connection.",
             "name": "Enter a name.",
             "nothing": "Enter a settlement or a weather station code.",
-            "nothing_or_radar": "Enter a settlement or a weather station code. To add only the radar, leave the name empty too and keep National radar checked."
+            "nothing_or_radar": "Enter a settlement or a weather station code. To add only the radar, leave the name empty too and keep National radar image checked."
         },
         "abort": {
             "already_configured": "This entry is already configured.",

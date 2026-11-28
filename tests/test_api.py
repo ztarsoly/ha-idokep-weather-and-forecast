@@ -1643,11 +1643,14 @@ class TestNextHourStandIn:
             parser, dt.datetime(2026, 10, 30, 12, 51, tzinfo=local_tz), ["16:00"]
         )
 
-        noon, one, two, three, _ = result["hourly_forecast"]
+        noon, one, two, three, listed = result["hourly_forecast"]
         assert (noon, two) == (saved[1], saved[2])
         # Halfway between 12:00 and 14:00, then between 14:00 and the listed
         assert one == hour_item("2026-10-30T13", wind_bearing=13)
-        assert three == hour_item("2026-10-30T15", wind_bearing=7)
+        assert three == {
+            **listed,
+            **hour_item("2026-10-30T15", wind_bearing=7),
+        }
         assert result["wind_bearing"] == 12
 
     def test_the_first_missing_hours_copy_the_first_saved_one(
@@ -1662,11 +1665,14 @@ class TestNextHourStandIn:
             parser, dt.datetime(2026, 10, 30, 12, 30, tzinfo=local_tz), ["16:00"]
         )
 
-        noon, one, two, three, _ = result["hourly_forecast"]
+        noon, one, two, three, listed = result["hourly_forecast"]
         assert noon == hour_item("2026-10-30T12", wind_bearing=40)
         assert one == hour_item("2026-10-30T13", wind_bearing=40)
         assert two == first
-        assert three == hour_item("2026-10-30T15", wind_bearing=20)
+        assert three == {
+            **listed,
+            **hour_item("2026-10-30T15", wind_bearing=20),
+        }
 
     def test_saved_hours_already_over_are_interpolated_from(
         self, parser: HourlyForecastParser
@@ -1689,7 +1695,8 @@ class TestNextHourStandIn:
 
         # Halfway from 11:00 to 13:00; the hours over aren't listed
         noon, listed = result["hourly_forecast"]
-        assert noon == hour_item("2026-10-30T12", wind_bearing=70)
+        # The rest is the later hour's
+        assert noon == {**listed, **hour_item("2026-10-30T12", wind_bearing=70)}
         assert listed["datetime"] == "2026-10-30T13:00:00+01:00"
         assert result["wind_bearing"] == 70
 
@@ -1818,14 +1825,30 @@ class TestInterpolatedHours:
         assert item["precipitation"] == 0.33
         assert item["native_wind_gust_speed"] in WindStrengthMapper.GUSTS.values()
 
-    def test_halfway_the_condition_is_the_earlier_ones(self) -> None:
-        """Halfway between two hours the earlier one's words are used."""
+    def test_halfway_the_condition_is_the_later_ones(self) -> None:
+        """Halfway between two hours the later one's words are used."""
         item = interpolated_item(self.BEFORE, self.AFTER, 0.5)
+
+        assert item["condition"] == "lightning-rainy"
+        assert item["storm"] is True
+
+    def test_halfway_a_storm_that_ends_is_gone(self) -> None:
+        """The storm flag is the later hour's too."""
+        item = interpolated_item(self.AFTER, self.BEFORE, 0.5)
 
         assert item["condition"] == "sunny"
         assert "storm" not in item
 
-    @pytest.mark.parametrize("share", [0.25, 0.75])
+    def test_halfway_the_wind_level_is_the_stronger_one(self) -> None:
+        """Between two levels the stronger wins, also when it is the earlier."""
+        stronger = {"wind_strength": "gentle_breeze"}
+        weaker = {"wind_strength": "light_breeze"}
+
+        for pair in ((stronger, weaker), (weaker, stronger)):
+            item = interpolated_item(*pair, 0.5)
+            assert item["wind_strength"] == "gentle_breeze"
+
+    @pytest.mark.parametrize("share", [0.25, 0.5, 0.75])
     def test_a_value_one_hour_lacks_is_the_nearer_ones(self, share: float) -> None:
         """Nothing is made up from a single value."""
         lacking = {
@@ -1868,7 +1891,7 @@ class TestInterpolatedHours:
         assert [item["condition"] for item in hours] == [
             "sunny",
             "sunny",
-            "sunny",
+            "rainy",
             "rainy",
             "rainy",
         ]
