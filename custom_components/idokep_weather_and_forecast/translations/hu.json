@@ -52,10 +52,10 @@
                 "name": "Hőmérséklet"
             },
             "temperature_max_today": {
-                "name": "Mai maximum hőmérséklet"
+                "name": "Napi maximumhőmérséklet"
             },
             "temperature_min_today": {
-                "name": "Mai minimum hőmérséklet"
+                "name": "Napi minimumhőmérséklet"
             },
             "condition": {
                 "name": "Állapot",
@@ -210,10 +210,10 @@
                 "name": "Légnyomás"
             },
             "station_precipitation_24h": {
-                "name": "24 órás csapadék"
+                "name": "Csapadék az elmúlt 24 órában"
             },
             "station_precipitation_today": {
-                "name": "Éjfél óta hullott csapadék"
+                "name": "Csapadék éjfél óta"
             },
             "station_precipitation_intensity": {
                 "name": "Csapadékintenzitás"

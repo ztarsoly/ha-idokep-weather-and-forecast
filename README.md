@@ -12,7 +12,7 @@ Az integráció az idokep.hu nyilvános oldalait olvassa (nincs hivatalos API, f
 ## Funkciók
 
 - **Időjárás entitás** óránkénti és napi (kb. 23 napos) előrejelzéssel, a Home Assistant új forecast API-jával
-- **Előrejelzési szenzorok**: hőmérséklet, állapot, mai maximum/minimum, szélirány, szélerősség, becsült szélsebesség és széllökés, csapadék, csapadék valószínűsége, valamint a település állomásainak átlagából páratartalom, harmatpont, légnyomás és UV-index, és ezekből számított hőérzet
+- **Előrejelzési szenzorok**: hőmérséklet, állapot, napi maximum- és minimumhőmérséklet, szélirány, szélerősség, becsült szélsebesség és széllökés, csapadék, csapadék valószínűsége, valamint a település állomásainak átlagából páratartalom, harmatpont, légnyomás és UV-index, és ezekből számított hőérzet
 - **Riasztások**: riasztás 3 órán belül, figyelmeztetés mára (nincs, sárga, narancs, piros; típusonként is) és vihar egy órán belül
 - **Időjárás-állomások** (nem kötelező): egy vagy több idokep.hu automata 12 mért adata egy szolgáltatásban összevonva, belőlük számított értékek (harmatpont, hőérzet, nedves hőmérséklet, abszolút páratartalom, páranyomás, páranyomás-hiány, felhőalap) és a mérés ideje
 - **Országos radar** (nem kötelező): animált GIF az utolsó 6 radarképből, külön szolgáltatásként
@@ -41,8 +41,8 @@ Település nélküli bejegyzésben nincs sem ez a szolgáltatás, sem az entit�
 | Hőmérséklet | szenzor (°C) | aktuális |
 | Állapot | szenzor (felsorolás) | pl. napos, derült éjszaka (napnyugta után), borult, eső |
 | Felhőzet | szenzor (%) | **becslés** az aktuális állapot leírásából (0, 25, 50, 75 vagy 100%; lásd lent) |
-| Mai maximum hőmérséklet | szenzor (°C) | a napi előrejelzésből, éjfélig megmarad |
-| Mai minimum hőmérséklet | szenzor (°C) | a napi előrejelzésből, éjfélig megmarad |
+| Napi maximumhőmérséklet | szenzor (°C) | a napi előrejelzésből, éjfélig megmarad |
+| Napi minimumhőmérséklet | szenzor (°C) | a napi előrejelzésből, éjfélig megmarad |
 | Szélirány (fok) | szenzor (°) | az aktuális óra előrejelzéséből |
 | Szélirány (égtáj) | szenzor (felsorolás) | 16 égtáj (É, ÉÉK, ÉK, …) |
 | Szélerősség | szenzor (felsorolás) | Beaufort-skála 0–12 (Szélcsend … Orkán) |
@@ -95,8 +95,8 @@ Minden szenzor `stations` attribútuma mutatja, melyik állomás(ok)tól szárma
 | Hőmérséklet | °C | mért |
 | Relatív páratartalom | % | mért |
 | Légnyomás | hPa | mért |
-| 24 órás csapadék | mm | mért |
-| Éjfél óta hullott csapadék | mm | mért |
+| Csapadék az elmúlt 24 órában | mm | mért |
+| Csapadék éjfél óta | mm | mért |
 | Csapadékintenzitás | mm/h | mért |
 | Szélsebesség | km/h | mért |
 | Széllökés | km/h | mért |
@@ -213,8 +213,8 @@ Minden más adat (aktuális időjárás, riasztások, térképek, állomásmér�
 ## Megjegyzések
 
 - A szélsebesség a Beaufort-fokozat alsó, a széllökés ennek 1,75-szerese, tehát mindkettő **becslés**; a valódi széllökés ennél nagyobb is lehet. Mért értékeket az időjárás-állomás ad.
-- Este, amikor az idokep.hu már nem mutatja a mai napot, a mai napi előrejelzés és a mai max/min éjfélig megmarad.
-- Az idokep.hu az óránkénti előrejelzést a következő órától listázza; az aktuális óra egy korábbi lekérdezésből megmarad, így az előrejelzés az aktuális órával kezdődik. Ha nincs ilyen korábbi lekérdezés (például közvetlenül az első telepítés után), az előrejelzés a következő órával kezdődik, és az aktuális szél és csapadék a következő órai letöltésig nem elérhető.
+- Este, amikor az idokep.hu már nem mutatja a mai napot, a mai napi előrejelzés és a mai max/min éjfélig megmarad. Ha nincs korábbról ismert mai adat, a mai nap az óránkénti előrejelzés mai óráiból áll össze (legmagasabb és legalacsonyabb hőmérséklet, csapadékösszeg, leggyakoribb időjárás, átlagos felhőzet); ez csak az ott szereplő órákat tükrözi, tehát este a nap hátralévő részét.
+- Az idokep.hu az óránkénti előrejelzést a következő órától listázza; az aktuális óra egy korábbi lekérdezésből megmarad, így az előrejelzés az aktuális órával kezdődik. Ha nincs ilyen korábbi lekérdezés (például közvetlenül a bejegyzés felvétele vagy a település módosítása után), az aktuális órára a következő óra előrejelzése kerül: ez látszik az óránkénti előrejelzés első elemeként, és ebből jön az aktuális szél, csapadék és csapadék valószínűsége (így a hőérzet is).
 - Az állomásadatok az idokep.hu grafikonjai mögötti adatfájlból származnak, ami nem hivatalos felület, és megváltozhat.
 
 ## Köszönetnyilvánítás

@@ -8,7 +8,8 @@ It is used in two ways:
 - while the page can't be downloaded, also after a restart, the forecast shown
   is the last one, followed hour by hour (forecast_as_of)
 - the page no longer lists the hour now running, and in the evening it no
-  longer shows today: the parser adds both to a successful download
+  longer shows today: the parser adds both to a successful download (without
+  an earlier one it makes them from the next hour and today's hours)
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from .api import (
     TimeUtils,
     WindStrengthMapper,
     current_hour_values,
+    daily_item_from_hours,
 )
 from .const import DOMAIN, HOURLY
 
@@ -98,8 +100,8 @@ def forecast_as_of(forecast: dict[str, Any], now: datetime) -> dict[str, Any]:
 
     The hours from the one now running, the days from today, today's max/min,
     and the current wind, precipitation and storm value from the running hour.
-    Alerts and warnings are not part of it. Empty if the forecast doesn't have
-    the hour now running.
+    Alerts and warnings are not part of it. A missing today is made from its
+    hours. Empty if the forecast doesn't have the hour now running.
     """
     hours = [
         (start, item)
@@ -121,9 +123,14 @@ def forecast_as_of(forecast: dict[str, Any], now: datetime) -> dict[str, Any]:
         for item in forecast.get("daily_forecast", [])
         if (day := _day(item)) is not None and day >= today
     ]
+    item = today_item(forecast, today)
+    if item is None:
+        item = daily_item_from_hours(forecast["hourly_forecast"], today)
+        if item is not None:
+            daily.insert(0, item)
     if daily:
         result["daily_forecast"] = daily
-    if (item := today_item(forecast, today)) is not None:
+    if item is not None:
         for key, value_key in TODAY_KEYS:
             if item.get(value_key) is not None:
                 result[key] = item[value_key]

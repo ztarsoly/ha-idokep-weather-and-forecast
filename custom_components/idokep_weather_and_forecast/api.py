@@ -11,6 +11,7 @@ import socket
 import unicodedata
 import zoneinfo
 from abc import ABC, abstractmethod
+from collections import Counter
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import aiohttp
@@ -623,8 +624,8 @@ class HourlyForecastParser(WeatherParser):
 
     idokep.hu lists only the coming hours (at 12:51 the list starts at
     13:00). The current hour's entry seen on an earlier fetch is kept and
-    still reported first until the hour ends. Without it there are no
-    current wind and precipitation values.
+    still reported first until the hour ends. Without it, e.g. right after
+    the entry was added, a copy of the next hour's entry stands in for it.
     """
 
     def __init__(self, records: FailureRecords | None = None) -> None:
@@ -704,7 +705,12 @@ class HourlyForecastParser(WeatherParser):
     def _with_current_hour(
         self, forecast: list[dict[str, Any]], now: dt.datetime
     ) -> list[dict[str, Any]]:
-        """Return forecast with the current hour's kept item put first if missing."""
+        """
+        Return the forecast with the current hour put first if the page lacks it.
+
+        The item kept from an earlier download; without one, the next hour's
+        with the current hour's time.
+        """
         first_start = dt.datetime.fromisoformat(forecast[0]["datetime"])
         if first_start <= now:
             return forecast
@@ -718,7 +724,12 @@ class HourlyForecastParser(WeatherParser):
             # The page starts after now, so this slot is before its first one
             if start <= now < start + dt.timedelta(hours=1):
                 return [item, *forecast]
-        return forecast
+        if first_start - now > dt.timedelta(hours=1):
+            return forecast  # the first hour listed isn't the next one
+        # Subtracted in UTC, so that a change of the clocks doesn't matter
+        start = first_start.astimezone(dt.UTC) - dt.timedelta(hours=1)
+        stand_in = start.astimezone(TimeUtils.get_local_timezone()).isoformat()
+        return [{**forecast[0], "datetime": stand_in}, *forecast]
 
     @staticmethod
     def storm_expected(forecast: list[dict[str, Any]], now: dt.datetime) -> bool:
@@ -934,6 +945,51 @@ class HourlyForecastParser(WeatherParser):
         return 0.2 if height <= 14 else 0.3  # 12 px / 16 px bars
 
 
+def daily_item_from_hours(
+    hours: list[dict[str, Any]], day: dt.date
+) -> dict[str, Any] | None:
+    """
+    Return a day's daily entry made from its hourly items.
+
+    The highest and lowest temperature, the precipitation's sum, the most
+    frequent condition and the mean cloud coverage of the hours given: late in
+    the day only the rest of it. None if no hour of the day has a temperature.
+    """
+    own = [
+        item
+        for item in hours
+        if str(item.get("datetime", ""))[:10] == day.isoformat()
+    ]
+
+    def values(key: str) -> list[Any]:
+        return [item[key] for item in own if item.get(key) is not None]
+
+    temperatures = values("temperature")
+    if not temperatures:
+        return None
+    # A day isn't called a clear night; of equally frequent ones the first
+    conditions = Counter(
+        "sunny" if condition == "clear-night" else condition
+        for condition in values("condition")
+    )
+    cloud_coverage = values("cloud_coverage")
+    precipitation = values("precipitation")
+    return {
+        "datetime": TimeUtils.day_start(day),
+        "temperature": max(temperatures),
+        "templow": min(temperatures),
+        "condition": conditions.most_common(1)[0][0] if conditions else None,
+        "cloud_coverage": (
+            round(sum(cloud_coverage) / len(cloud_coverage))
+            if cloud_coverage
+            else None
+        ),
+        "precipitation": (
+            round(sum(precipitation), 2) if precipitation else None
+        ),
+    }
+
+
 class DailyForecastParser(WeatherParser):
     """
     Parser for the daily forecast columns.
@@ -943,7 +999,8 @@ class DailyForecastParser(WeatherParser):
 
     In the evening idokep.hu drops today's column (the strip then starts with
     tomorrow). Today's entry seen earlier is kept and still reported, both in
-    the daily forecast and as today's max/min, until midnight.
+    the daily forecast and as today's max/min, until midnight. Without one, it
+    is made from today's hourly items (see add_today_from_hours).
     """
 
     def __init__(self, records: FailureRecords | None = None) -> None:
@@ -1036,6 +1093,16 @@ class DailyForecastParser(WeatherParser):
             result["daily_forecast"] = daily_forecast
 
         return result
+
+    def add_today_from_hours(self, hours: list[dict[str, Any]]) -> None:
+        """
+        Make today's entry from its hours while none is remembered.
+
+        Call it before parsing the page: a column for today replaces it.
+        """
+        today = dt.datetime.now(tz=TimeUtils.get_local_timezone()).date()
+        if self._kept_today_item(today) is None:
+            self._today_item = daily_item_from_hours(hours, today)
 
     def restore_today_forecast(self, item: dict[str, Any]) -> None:
         """Remember today's daily entry from before a restart."""
@@ -1381,8 +1448,10 @@ class IdokepApiClient:
         from this one download.
         """
         page = await self._get_page(IdokepConfig.get_hourly_forecast_url(location))
+        hourly = self._hourly_parser.parse(page)
+        self._daily_parser.add_today_from_hours(hourly.get("hourly_forecast", []))
         result = {
-            **self._hourly_parser.parse(page),
+            **hourly,
             **self._alert_parser.parse(page),
             **self._daily_parser.parse(page),
             **self._daily_parser.parse_today_min_max(page),

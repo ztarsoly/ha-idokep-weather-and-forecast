@@ -199,8 +199,30 @@ def test_forecast_as_of_without_a_forecast() -> None:
     assert forecast_as_of({}, at(20)) == {}
 
 
+def test_forecast_as_of_makes_a_missing_today_from_its_hours() -> None:
+    """All of today's hours count, also the past ones; it comes first."""
+    forecast = {
+        "hourly_forecast": [
+            {"datetime": "2026-10-29T19:00:00+01:00", "temperature": 11},
+            {"datetime": "2026-10-29T20:00:00+01:00", "temperature": 9},
+            {"datetime": "2026-10-29T21:00:00+01:00", "temperature": 8},
+            {"datetime": "2026-10-30T00:00:00+01:00", "temperature": 2},
+        ],
+        "daily_forecast": [FOLLOWED["daily_forecast"][2]],
+    }
+
+    result = forecast_as_of(forecast, at(20, 30))
+
+    today, tomorrow = result["daily_forecast"]
+    assert today["datetime"] == "2026-10-29T00:00:00+01:00"
+    assert (today["temperature"], today["templow"]) == (11, 8)
+    assert tomorrow == FOLLOWED["daily_forecast"][2]
+    assert result["temperature_max_today"] == 11
+    assert result["temperature_min_today"] == 8
+
+
 def test_forecast_as_of_without_daily_forecast() -> None:
-    """No daily entries: no daily forecast, no max/min."""
+    """No daily entries or hourly temperatures: no daily forecast, no max/min."""
     forecast = {"hourly_forecast": FOLLOWED["hourly_forecast"]}
     result = forecast_as_of(forecast, at(20))
     assert "daily_forecast" not in result

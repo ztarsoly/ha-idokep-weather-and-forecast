@@ -52,10 +52,10 @@
                 "name": "Temperature"
             },
             "temperature_max_today": {
-                "name": "Today's maximum temperature"
+                "name": "Daily maximum temperature"
             },
             "temperature_min_today": {
-                "name": "Today's minimum temperature"
+                "name": "Daily minimum temperature"
             },
             "condition": {
                 "name": "Condition",
@@ -210,7 +210,7 @@
                 "name": "Pressure"
             },
             "station_precipitation_24h": {
-                "name": "Precipitation (last 24 hours)"
+                "name": "Precipitation in the last 24 hours"
             },
             "station_precipitation_today": {
                 "name": "Precipitation since midnight"

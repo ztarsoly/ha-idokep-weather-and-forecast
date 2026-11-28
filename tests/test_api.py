@@ -27,6 +27,7 @@ from custom_components.idokep_weather_and_forecast.api import (
     TimeUtils,
     WeatherConditionMapper,
     WindStrengthMapper,
+    daily_item_from_hours,
     station_map_average,
 )
 from custom_components.idokep_weather_and_forecast.failures import FailureRecords
@@ -1351,7 +1352,7 @@ class TestHourlyParserBranches:
         assert probabilities == [18, 0]
 
     def test_no_current_hour_without_its_slot(self) -> None:
-        """If no slot contains now, no other hour stands in for it."""
+        """Only the slot containing now is the current hour."""
         forecast = [
             {"datetime": "2026-10-29T17:00:00+01:00", "wind_bearing": 90},
             {"datetime": "2026-10-29T18:00:00+01:00", "wind_bearing": 180},
@@ -1362,7 +1363,11 @@ class TestHourlyParserBranches:
         assert HourlyForecastParser._current_hour_item(forecast, now) is None
 
     def _parse_at(
-        self, parser: HourlyForecastParser, now: dt.datetime, hours: list[str]
+        self,
+        parser: HourlyForecastParser,
+        now: dt.datetime,
+        hours: list[str],
+        first_angle: int = 0,
     ) -> dict:
         """Parse wind cards for the given hours with the clock frozen at now."""
 
@@ -1375,7 +1380,9 @@ class TestHourlyParserBranches:
                 return now.astimezone(tz)
 
         html = "".join(
-            self.WIND_CARD_HTML.format(rain="", hour=hour, angle=90 * index)
+            self.WIND_CARD_HTML.format(
+                rain="", hour=hour, angle=first_angle + 90 * index
+            )
             for index, hour in enumerate(hours)
         )
         with patch(
@@ -1442,19 +1449,6 @@ class TestHourlyParserBranches:
         }
         assert len(result["hourly_forecast"]) == 2
 
-    def test_parse_without_earlier_data_starts_at_page(
-        self, parser: HourlyForecastParser
-    ) -> None:
-        """With nothing seen before, the forecast starts where the page does."""
-        local_tz = zoneinfo.ZoneInfo("Europe/Budapest")
-        result = self._parse_at(
-            parser, dt.datetime(2026, 10, 30, 12, 51, tzinfo=local_tz), ["13:00"]
-        )
-
-        assert [item["datetime"][11:16] for item in result["hourly_forecast"]] == [
-            "13:00"
-        ]
-
     # ---- extract_precipitation_probability ---------------------------------
 
     def test_precipitation_probability_no_rain_chance_div(
@@ -1510,6 +1504,254 @@ class TestHourlyParserBranches:
 # ---------------------------------------------------------------------------
 # DailyForecastParser branch tests
 # ---------------------------------------------------------------------------
+
+
+class TestNextHourStandIn:
+    """The next hour stands in for the current one while that is unknown."""
+
+    WIND_CARD_HTML = TestHourlyParserBranches.WIND_CARD_HTML
+    _parse_at = TestHourlyParserBranches._parse_at
+
+    @pytest.fixture
+    def parser(self) -> HourlyForecastParser:
+        """Return a HourlyForecastParser instance."""
+        return HourlyForecastParser()
+
+    def test_parse_uses_the_next_hour_while_the_current_one_is_unknown(
+        self, parser: HourlyForecastParser
+    ) -> None:
+        """Right after the start the list begins with a copy of the next hour."""
+        local_tz = zoneinfo.ZoneInfo("Europe/Budapest")
+        result = self._parse_at(
+            parser,
+            dt.datetime(2026, 10, 30, 12, 51, tzinfo=local_tz),
+            ["13:00", "14:00"],
+        )
+
+        current, following = result["hourly_forecast"][:2]
+        assert current == {**following, "datetime": "2026-10-30T12:00:00+01:00"}
+        assert len(result["hourly_forecast"]) == 3
+        # From the 13:00 slot (first card, 0 degrees)
+        assert result["wind_bearing"] == 0
+        assert result["wind_strength"] == "moderate_breeze"
+        assert result["wind_speed"] == 20
+        assert result["wind_gust_speed"] == 35
+        assert result["precipitation"] == 0
+        assert result["precipitation_probability"] == 0
+
+    def test_parse_goes_back_to_the_current_hour(
+        self, parser: HourlyForecastParser
+    ) -> None:
+        """At the next download the hour borrowed before is the current one."""
+        local_tz = zoneinfo.ZoneInfo("Europe/Budapest")
+        self._parse_at(
+            parser,
+            dt.datetime(2026, 10, 30, 12, 51, tzinfo=local_tz),
+            ["13:00", "14:00"],
+        )
+        result = self._parse_at(
+            parser,
+            dt.datetime(2026, 10, 30, 13, 0, 59, tzinfo=local_tz),
+            ["14:00", "15:00"],
+            first_angle=45,
+        )
+
+        # The kept 13:00 slot (0 degrees), not the next one, 14:00 (45)
+        hours = [item["datetime"][11:16] for item in result["hourly_forecast"]]
+        assert hours == ["13:00", "14:00", "15:00"]
+        assert result["wind_bearing"] == 0
+
+    @pytest.mark.parametrize(
+        ("now", "first", "stand_in"),
+        [
+            pytest.param(
+                (2026, 10, 30, 23, 30),
+                "0:00",
+                "2026-10-30T23:00:00+01:00",
+                id="before-midnight",
+            ),
+            pytest.param(
+                (2026, 10, 25, 1, 30),
+                "2:00",
+                "2026-10-25T01:00:00+02:00",
+                id="before-the-clocks-go-back",
+            ),
+        ],
+    )
+    def test_the_stand_in_gets_the_current_hours_time(
+        self, parser: HourlyForecastParser, now: tuple, first: str, stand_in: str
+    ) -> None:
+        """Its date and offset are the current hour's."""
+        local_tz = zoneinfo.ZoneInfo("Europe/Budapest")
+        result = self._parse_at(
+            parser, dt.datetime(*now, tzinfo=local_tz), [first]
+        )
+
+        assert result["hourly_forecast"][0]["datetime"] == stand_in
+
+    def test_parse_uses_no_hour_further_ahead(
+        self, parser: HourlyForecastParser
+    ) -> None:
+        """Only the next hour can stand in, not a later one."""
+        local_tz = zoneinfo.ZoneInfo("Europe/Budapest")
+        result = self._parse_at(
+            parser, dt.datetime(2026, 10, 30, 12, 51, tzinfo=local_tz), ["14:00"]
+        )
+
+        assert [item["datetime"][11:16] for item in result["hourly_forecast"]] == [
+            "14:00"
+        ]
+        assert "wind_bearing" not in result
+        assert "precipitation" not in result
+
+
+def hour_item(start: str, **values: object) -> dict:
+    """Return an hourly item starting at "2026-10-30T20" and the like."""
+    return {"datetime": f"{start}:00:00+01:00", **values}
+
+
+class TestTodayFromHours:
+    """Today's daily entry made from the hourly forecast."""
+
+    TODAY = dt.date(2026, 10, 30)
+
+    def test_the_days_hours_are_summed_up(self) -> None:
+        """Max, min, sum, the most frequent condition and the mean clouds."""
+        hours = [
+            hour_item(
+                "2026-10-30T20",
+                temperature=7,
+                condition="rainy",
+                cloud_coverage=100,
+                precipitation=0.2,
+            ),
+            hour_item(
+                "2026-10-30T21",
+                temperature=4,
+                condition="cloudy",
+                cloud_coverage=75,
+                precipitation=0.1,
+            ),
+            hour_item(
+                "2026-10-30T22",
+                temperature=5,
+                condition="cloudy",
+                cloud_coverage=75,
+                precipitation=0,
+            ),
+            # Tomorrow's hour is left out
+            hour_item("2026-10-31T00", temperature=-8, precipitation=9),
+        ]
+
+        assert daily_item_from_hours(hours, self.TODAY) == {
+            "datetime": "2026-10-30T00:00:00+01:00",
+            "temperature": 7,
+            "templow": 4,
+            "condition": "cloudy",
+            "cloud_coverage": 83,
+            "precipitation": 0.3,
+        }
+
+    def test_a_clear_night_makes_a_sunny_day(self) -> None:
+        """A daily entry isn't a night."""
+        hours = [hour_item("2026-10-30T20", temperature=7, condition="clear-night")]
+
+        assert daily_item_from_hours(hours, self.TODAY)["condition"] == "sunny"
+
+    def test_missing_values_stay_missing(self) -> None:
+        """Only the temperature is needed."""
+        hours = [hour_item("2026-10-30T20", temperature=7, condition=None)]
+
+        item = daily_item_from_hours(hours, self.TODAY)
+
+        assert (item["temperature"], item["templow"]) == (7, 7)
+        assert item["condition"] is None
+        assert item["cloud_coverage"] is None
+        assert item["precipitation"] is None
+
+    @pytest.mark.parametrize(
+        "hours",
+        [
+            [],
+            [hour_item("2026-10-31T00", temperature=3)],
+            [hour_item("2026-10-30T20", temperature=None)],
+        ],
+        ids=["no-hours", "another-day", "no-temperature"],
+    )
+    def test_without_a_temperature_there_is_no_entry(self, hours: list) -> None:
+        """Nothing is made up from nothing."""
+        assert daily_item_from_hours(hours, self.TODAY) is None
+
+    @staticmethod
+    async def _download(client: IdokepApiClient, html: str, hour: int) -> dict:
+        """Download the forecast page at an hour of 2026-10-30."""
+        now = dt.datetime(
+            2026, 10, 30, hour, 30, tzinfo=zoneinfo.ZoneInfo("Europe/Budapest")
+        )
+
+        class FrozenDateTime(dt.datetime):
+
+            """The real datetime class, stopped at a fixed time."""
+
+            @classmethod
+            def now(cls, tz: dt.tzinfo | None = None) -> dt.datetime:
+                return now.astimezone(tz)
+
+        with (
+            patch.object(HttpClient, "get_html", AsyncMock(return_value=html)),
+            patch(
+                "custom_components.idokep_weather_and_forecast.api.dt.datetime",
+                FrozenDateTime,
+            ),
+        ):
+            return await client.async_get_hourly_forecast("Eger")
+
+    @staticmethod
+    def _cards(*hours: tuple[str, int]) -> str:
+        """Return hourly cards for (hour, temperature) pairs."""
+        return "".join(
+            '<div class="ik wide-hourly-forecast-card">'
+            f'<div class="ik wide-hourly-forecast-hour">{hour}</div>'
+            f'<div class="ik tempValue"><a>{temperature}</a></div></div>'
+            for hour, temperature in hours
+        )
+
+    async def test_an_evening_start_makes_today_and_keeps_it(self) -> None:
+        """No column for today: it comes from the hours, also later on."""
+        client = IdokepApiClient(Mock(spec=aiohttp.ClientSession))
+
+        first = await self._download(
+            client, self._cards(("21:00", 6), ("22:00", 3), ("0:00", -2)), 20
+        )
+        later = await self._download(
+            client, self._cards(("23:00", 1), ("0:00", -2)), 22
+        )
+
+        for result in (first, later):
+            today = result["daily_forecast"][0]
+            assert today["datetime"] == "2026-10-30T00:00:00+01:00"
+            assert (today["temperature"], today["templow"]) == (6, 3)
+            assert result["temperature_max_today"] == 6
+            assert result["temperature_min_today"] == 3
+
+    async def test_the_pages_own_today_wins(self) -> None:
+        """A column for today replaces what was made from the hours."""
+        client = IdokepApiClient(Mock(spec=aiohttp.ClientSession))
+        column = (
+            '<div class="ik dailyForecastCol"><div class="ik dfIconAlert">'
+            "<a title='Péntek<br>2026. október 30.'></a></div>"
+            '<div class="ik max"><a>12</a></div>'
+            '<div class="ik min"><a>1</a></div></div>'
+        )
+        await self._download(client, self._cards(("21:00", 6)), 20)
+
+        result = await self._download(
+            client, self._cards(("22:00", 3)) + column, 21
+        )
+
+        assert result["temperature_max_today"] == 12
+        assert result["temperature_min_today"] == 1
+        assert len(result["daily_forecast"]) == 1
 
 
 class TestDailyParserBranches:
