@@ -327,6 +327,14 @@ def test_merge_rounds_to_two_decimals(method: str) -> None:
         assert values == {"hom": 10.06, "csap24": 0.0, "szelirany": 15.0}
 
 
+def test_merge_average_takes_a_half_away_from_zero() -> None:
+    """Frost too: -10.125 becomes -10.13, 10.125 becomes 10.13."""
+    c = _station("c", 1, hom=-10.12, rh=10.12)
+    d = _station("d", 1, hom=-10.13, rh=10.13)
+    values = merge_readings([c, d], "average").values
+    assert values == {"hom": -10.13, "rh": 10.13}
+
+
 def test_merge_average_keeps_hundredths() -> None:
     """Rain in 0.01 mm survives averaging (it used to be rounded to 0.1)."""
     c = _station("c", 1, csap24=0.04)

@@ -39,6 +39,7 @@ from .api import (
 from .const import DOMAIN
 from .coordinator import SOURCE_ENTITIES
 from .entity import IdokepEntity, IdokepStationEntity
+from .rounding import round_whole
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -101,9 +102,10 @@ def bearing_to_compass(bearing: float | None) -> str | None:
     """Return the compass point (n, ne, ...) for a bearing in degrees."""
     if bearing is None:
         return None
-    # Each point covers 22.5 degrees centred on it: N is 348.75-11.25
+    # Each point covers 22.5 degrees centred on it, its lower edge included:
+    # N is from 348.75 to just under 11.25
     step = 360 / len(COMPASS_POINTS)
-    return COMPASS_POINTS[round(bearing / step) % len(COMPASS_POINTS)]
+    return COMPASS_POINTS[round_whole(bearing / step) % len(COMPASS_POINTS)]
 
 
 ENTITY_DESCRIPTIONS = (

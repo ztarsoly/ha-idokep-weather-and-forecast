@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import math
 
+from .rounding import round_to
+
 # Results are rounded to 2 decimals, like the merged station values
 DECIMALS = 2
 
@@ -40,7 +42,7 @@ def dew_point(temperature: float | None, humidity: float | None) -> float | None
     """Return the dew point (°C) from temperature (°C) and humidity (%)."""
     if not _valid(temperature, humidity):
         return None
-    return round(_dew_point(temperature, humidity), DECIMALS)
+    return round_to(_dew_point(temperature, humidity), DECIMALS)
 
 
 def apparent_temperature(
@@ -58,7 +60,7 @@ def apparent_temperature(
     # The BoM's own vapour pressure formula (hPa)
     actual = humidity / 100 * 6.105 * math.exp(17.27 * temperature / (237.7 + temperature))
     wind = wind_speed / KMH_PER_MS
-    return round(temperature + 0.33 * actual - 0.70 * wind - 4.00, DECIMALS)
+    return round_to(temperature + 0.33 * actual - 0.70 * wind - 4.00, DECIMALS)
 
 
 def wet_bulb_temperature(
@@ -80,7 +82,7 @@ def wet_bulb_temperature(
         + 0.00391838 * rh**1.5 * math.atan(0.023101 * rh)
         - 4.686035
     )
-    return round(min(wet_bulb, t), DECIMALS)
+    return round_to(min(wet_bulb, t), DECIMALS)
 
 
 def absolute_humidity(
@@ -90,14 +92,18 @@ def absolute_humidity(
     if not _valid(temperature, humidity):
         return None
     actual = _saturation_vapour_pressure(temperature) * humidity / 100
-    return round(ABSOLUTE_HUMIDITY_FACTOR * actual / (temperature + KELVIN), DECIMALS)
+    return round_to(
+        ABSOLUTE_HUMIDITY_FACTOR * actual / (temperature + KELVIN), DECIMALS
+    )
 
 
 def vapour_pressure(temperature: float | None, humidity: float | None) -> float | None:
     """Return the vapour pressure (hPa): the water vapour's share of the air pressure."""
     if not _valid(temperature, humidity):
         return None
-    return round(_saturation_vapour_pressure(temperature) * humidity / 100, DECIMALS)
+    return round_to(
+        _saturation_vapour_pressure(temperature) * humidity / 100, DECIMALS
+    )
 
 
 def vapour_pressure_deficit(
@@ -108,7 +114,7 @@ def vapour_pressure_deficit(
         return None
     saturation = _saturation_vapour_pressure(temperature)
     # hPa -> kPa
-    return round(saturation * (1 - humidity / 100) / 10, DECIMALS)
+    return round_to(saturation * (1 - humidity / 100) / 10, DECIMALS)
 
 
 def cloud_base(temperature: float | None, humidity: float | None) -> float | None:
@@ -121,4 +127,4 @@ def cloud_base(temperature: float | None, humidity: float | None) -> float | Non
     if not _valid(temperature, humidity):
         return None
     spread = temperature - _dew_point(temperature, humidity)
-    return round(max(spread, 0) * CLOUD_BASE_M_PER_K, DECIMALS)
+    return round_to(max(spread, 0) * CLOUD_BASE_M_PER_K, DECIMALS)

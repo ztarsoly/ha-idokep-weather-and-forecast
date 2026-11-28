@@ -7,7 +7,6 @@ import bisect
 import contextlib
 import datetime as dt
 import html
-import math
 import re
 import socket
 import unicodedata
@@ -23,6 +22,7 @@ from slugify import slugify
 from .const import LOGGER
 from .failures import FailureRecords
 from .html_tree import Element, parse_html
+from .rounding import round_to, round_whole
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -261,7 +261,7 @@ class WindStrengthMapper:
     }
     # Level code: estimated gust in km/h, GUST_FACTOR times the wind speed
     GUSTS: ClassVar[dict[str, float]] = {
-        level: round(speed * GUST_FACTOR, 2) for level, speed in SPEEDS.items()
+        level: round_to(speed * GUST_FACTOR, 2) for level, speed in SPEEDS.items()
     }
 
     # Accent-free, space-free Hungarian words: level code. The official
@@ -630,11 +630,6 @@ def hour_start(item: dict[str, Any]) -> dt.datetime | None:
     return start if start.tzinfo is not None else None
 
 
-def _half_up(value: float) -> int:
-    """Round to a whole number, a half upwards."""
-    return math.floor(value + 0.5)
-
-
 def interpolated_item(
     before: dict[str, Any], after: dict[str, Any], share: float
 ) -> dict[str, Any]:
@@ -659,18 +654,17 @@ def interpolated_item(
 
     for key in ("temperature", "cloud_coverage", "precipitation_probability"):
         if pair := ends(key):
-            result[key] = _half_up(between(pair))
+            result[key] = round_whole(between(pair))
     if pair := ends("precipitation"):
-        # Rounded first, as halves such as 0.015 aren't exact in binary
-        hundredths = _half_up(round(between(pair) * 100, 6))
-        result["precipitation"] = hundredths / 100 if hundredths else 0
+        result["precipitation"] = round_to(between(pair), 2) or 0
     if pair := ends("wind_bearing"):
         turn = (pair[1] - pair[0] + 180) % 360 - 180
-        result["wind_bearing"] = _half_up(pair[0] + turn * share) % 360
+        angle = (pair[0] + turn * share) % 360
+        result["wind_bearing"] = round_whole(angle) % 360
     levels = WindStrengthMapper.levels()
     if (pair := ends("wind_strength")) and all(level in levels for level in pair):
         low, high = (levels.index(level) for level in pair)
-        level = levels[_half_up(low + (high - low) * share)]
+        level = levels[round_whole(low + (high - low) * share)]
         result["wind_strength"] = level
         result["native_wind_speed"] = WindStrengthMapper.SPEEDS[level]
         result["native_wind_gust_speed"] = WindStrengthMapper.GUSTS[level]
@@ -1015,7 +1009,7 @@ class HourlyForecastParser(WeatherParser):
             for comment in level.comments():
                 match = re.search(r"(\d+(?:[.,]\d+)?)", comment)
                 if match:
-                    return round(float(match.group(1).replace(",", ".")) / 10, 2)
+                    return round_to(float(match.group(1).replace(",", ".")) / 10, 2)
         meter = card.find("div", "hourly-rainlevel-meter")
         style = "" if meter is None else meter.get("style", "")
         match = re.search(r"height:\s*(\d+)px", style)
@@ -1064,12 +1058,12 @@ def daily_item_from_hours(
         "templow": min(temperatures),
         "condition": conditions.most_common(1)[0][0] if conditions else None,
         "cloud_coverage": (
-            round(sum(cloud_coverage) / len(cloud_coverage))
+            round_whole(sum(cloud_coverage) / len(cloud_coverage))
             if cloud_coverage
             else None
         ),
         "precipitation": (
-            round(sum(precipitation), 2) if precipitation else None
+            round_to(sum(precipitation), 2) if precipitation else None
         ),
     }
 
@@ -1342,7 +1336,7 @@ class DailyForecastParser(WeatherParser):
             style = rain_bar.get("style", "")
             match = re.search(r"height:\s*(\d+)px", style)
             if match and int(match.group(1)) > 1:
-                return round((int(match.group(1)) - 1) / 2, 2)
+                return round_to((int(match.group(1)) - 1) / 2, 2)
         return 0
 
 
@@ -1381,7 +1375,7 @@ def _settlement_average(
     values = [value for name, value in stations if name == wanted] or [
         value for name, value in stations if _is_part_of(name, wanted)
     ]
-    return round(sum(values) / len(values), 2) if values else None
+    return round_to(sum(values) / len(values), 2) if values else None
 
 
 def station_map_average(page: str, map_name: str, location: str) -> float | None:

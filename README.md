@@ -212,6 +212,7 @@ Minden más adat (aktuális időjárás, riasztások, térképek, állomásmér�
 
 ## Megjegyzések
 
+- Az integráció minden kerekítése a felet a nullától távolabb kerekíti (pl. 2,5 → 3 és −2,5 → −3).
 - A szélsebesség a Beaufort-fokozat alsó, a széllökés ennek 1,75-szerese, tehát mindkettő **becslés**; a valódi széllökés ennél nagyobb is lehet. Mért értékeket az időjárás-állomás ad.
 - Este, amikor az idokep.hu már nem mutatja a mai napot, a mai napi előrejelzés és a mai max/min éjfélig megmarad. Ha nincs korábbról ismert mai adat, a mai nap az óránkénti előrejelzés mai óráiból áll össze (legmagasabb és legalacsonyabb hőmérséklet, csapadékösszeg, leggyakoribb időjárás, átlagos felhőzet); ez csak az ott szereplő órákat tükrözi, tehát este a nap hátralévő részét.
 - Az idokep.hu az óránkénti előrejelzést a következő órától listázza. Az aktuális órától kezdve minden hiányzó óra pótlódik:

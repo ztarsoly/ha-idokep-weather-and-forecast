@@ -1839,6 +1839,43 @@ class TestInterpolatedHours:
         assert item["condition"] == "sunny"
         assert "storm" not in item
 
+    @pytest.mark.parametrize(
+        ("first", "last", "expected"),
+        [
+            pytest.param(2, 3, 3, id="above-zero"),
+            pytest.param(-2, -3, -3, id="below-zero"),
+            pytest.param(0, -1, -1, id="just-below-zero"),
+        ],
+    )
+    def test_a_half_degree_goes_away_from_zero(
+        self, first: int, last: int, expected: int
+    ) -> None:
+        """Warmer above zero, colder below it."""
+        item = interpolated_item(
+            {"temperature": first}, {"temperature": last}, 0.5
+        )
+
+        assert item["temperature"] == expected
+
+    @pytest.mark.parametrize(
+        ("first", "last", "expected"),
+        [
+            pytest.param(359, 0, 0, id="just-short-of-north"),
+            pytest.param(0, 359, 0, id="the-other-way-round"),
+            pytest.param(10, 11, 11, id="clockwise"),
+            pytest.param(11, 10, 11, id="anticlockwise"),
+        ],
+    )
+    def test_a_half_degree_of_direction_goes_up(
+        self, first: int, last: int, expected: int
+    ) -> None:
+        """The angle is positive, whichever way the wind turns."""
+        item = interpolated_item(
+            {"wind_bearing": first}, {"wind_bearing": last}, 0.5
+        )
+
+        assert item["wind_bearing"] == expected
+
     def test_halfway_the_wind_level_is_the_stronger_one(self) -> None:
         """Between two levels the stronger wins, also when it is the earlier."""
         stronger = {"wind_strength": "gentle_breeze"}
@@ -1917,6 +1954,17 @@ class TestTodayFromHours:
     """Today's daily entry made from the hourly forecast."""
 
     TODAY = dt.date(2026, 10, 30)
+
+    def test_a_half_percent_of_cloud_goes_up(self) -> None:
+        """62.5% is 63%, not the even 62%."""
+        hours = [
+            hour_item("2026-10-30T20", temperature=1, cloud_coverage=50),
+            hour_item("2026-10-30T21", temperature=1, cloud_coverage=75),
+        ]
+
+        item = daily_item_from_hours(hours, self.TODAY)
+
+        assert item["cloud_coverage"] == 63
 
     def test_the_days_hours_are_summed_up(self) -> None:
         """Max, min, sum, the most frequent condition and the mean clouds."""

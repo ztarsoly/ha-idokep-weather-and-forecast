@@ -473,6 +473,11 @@ class TestWindDirection:
         [
             (0, "n"),
             (11, "n"),  # N covers 348.75-11.25
+            # A boundary is the next point's, as halves go up
+            (11.25, "nne"),
+            (33.75, "ne"),
+            (348.7, "nnw"),
+            (348.75, "n"),
             (12, "nne"),
             (22, "nne"),
             (34, "ne"),  # NNE covers 11.25-33.75
@@ -496,7 +501,7 @@ class TestWindDirection:
             (360, "n"),
         ],
     )
-    def test_bearing_to_compass(self, bearing: int, expected: str) -> None:
+    def test_bearing_to_compass(self, bearing: float, expected: str) -> None:
         """Each compass point covers 22.5 degrees centred on it."""
         assert bearing_to_compass(bearing) == expected
 

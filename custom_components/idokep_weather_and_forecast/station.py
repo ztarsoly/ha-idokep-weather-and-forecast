@@ -45,6 +45,7 @@ from .const import (
     MIN_MAX_AGE,
     STATION,
 )
+from .rounding import round_to
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -287,8 +288,9 @@ def _average(key: str, readings: list[Reading]) -> float:
     if key == "szelirany":
         sin = sum(math.sin(math.radians(r.value)) for r in readings)
         cos = sum(math.cos(math.radians(r.value)) for r in readings)
-        return round(math.degrees(math.atan2(sin, cos)), DECIMALS) % 360
-    return round(sum(r.value for r in readings) / len(readings), DECIMALS)
+        angle = math.degrees(math.atan2(sin, cos)) % 360
+        return round_to(angle, DECIMALS) % 360
+    return round_to(sum(r.value for r in readings) / len(readings), DECIMALS)
 
 
 def merge_readings(stations: list[StationReadings], method: str) -> StationData:
@@ -316,7 +318,7 @@ def merge_readings(stations: list[StationReadings], method: str) -> StationData:
                 chosen = [max(candidates, key=lambda reading: reading.time)]
             else:
                 chosen = candidates[:1]
-            values[key] = round(chosen[0].value, DECIMALS)
+            values[key] = round_to(chosen[0].value, DECIMALS)
         sources[key] = tuple(reading.code for reading in chosen)
         used.extend(chosen)
     times = [r.time for r in used] or [s.last for s in stations if s.last]
